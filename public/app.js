@@ -3,1050 +3,727 @@ let currentSection = 'overview';
 let branches = [];
 let products = [];
 let purchases = [];
-let alerts = [];
 let categories = [];
 let currentUser = null;
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', init);
-
-async function init() {
-  try {
-    currentUser = await api('GET', '/api/me');
-    if (currentUser && currentUser.username) {
-      const avatarEl = document.getElementById('user-avatar');
-      const usernameEl = document.getElementById('sidebar-username');
-      if (avatarEl) avatarEl.textContent = currentUser.username[0].toUpperCase();
-      if (usernameEl) usernameEl.textContent = currentUser.username;
-    }
-  } catch (e) {
-    window.location.href = '/';
-    return;
-  }
-
-  await loadAllData();
-  setupNav();
-  setupLogout();
-  setupSidebarToggle();
-  navigateTo('overview');
+// ─── API ──────────────────────────────────────────────────────────────────────
+async function api(method, url, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  if (res.status === 401) { window.location.href = '/'; throw new Error('Unauthorized'); }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Server xatosi');
+  return data;
 }
 
-async function loadAllData() {
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtMoney(n) { return Number(n||0).toLocaleString('uz-UZ') + " so'm"; }
+function today() { return new Date().toISOString().split('T')[0]; }
+function daysLeft(stock, du) { if (!du || du <= 0) return Infinity; return stock / du; }
+function brName(id) { return branches.find(b => b.id == id)?.name || '—'; }
+
+function statusBadge(days) {
+  if (!isFinite(days)) return `<span class="badge badge-gray">—</span>`;
+  if (days <= 0)  return `<span class="badge badge-red"><i class="ti ti-alert-triangle"></i> Tugagan</span>`;
+  if (days <= 2)  return `<span class="badge badge-red"><i class="ti ti-alarm"></i> ${days.toFixed(1)} kun</span>`;
+  if (days <= 7)  return `<span class="badge badge-amber"><i class="ti ti-clock"></i> ${days.toFixed(1)} kun</span>`;
+  if (days <= 14) return `<span class="badge badge-blue">${Math.round(days)} kun</span>`;
+  return `<span class="badge badge-teal">${Math.round(days)} kun</span>`;
+}
+
+function daysColor(days) {
+  if (!isFinite(days) || days > 7) return 'var(--teal)';
+  if (days <= 2) return 'var(--red)';
+  return 'var(--amber)';
+}
+
+// ─── Toast ───────────────────────────────────────────────────────────────────
+function toast(msg, type = 'success') {
+  const c = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const icon = { success: 'ti-check', error: 'ti-alert-circle', info: 'ti-info-circle' }[type] || 'ti-info-circle';
+  el.innerHTML = `<i class="ti ${icon}"></i><span>${esc(msg)}</span>`;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ─── Modal ───────────────────────────────────────────────────────────────────
+function openModal(html) {
+  document.getElementById('modal-box').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal-overlay') || e === true)
+    document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ─── Load data ────────────────────────────────────────────────────────────────
+async function loadAll() {
   try {
-    [branches, products, purchases, categories] = await Promise.all([
+    const results = await Promise.all([
       api('GET', '/api/branches'),
       api('GET', '/api/products'),
       api('GET', '/api/purchases'),
-      api('GET', '/api/categories')
+      api('GET', '/api/categories'),
     ]);
-    const alertData = await api('GET', '/api/dashboard/alerts');
-    alerts = alertData;
-    updateAlertBadge(alerts.length);
+    branches   = results[0];
+    products   = results[1];
+    purchases  = results[2];
+    categories = results[3];
+    updateAlertBadge();
   } catch (e) {
-    console.error('Data load error:', e);
+    console.error('loadAll error:', e);
   }
 }
 
-function setupNav() {
-  document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', (e) => {
-      e.preventDefault();
-      const section = item.dataset.section;
-      navigateTo(section);
-      if (window.innerWidth <= 768) {
-        document.getElementById('sidebar').classList.remove('open');
-      }
-    });
-  });
+function alertProducts() {
+  return products.filter(p => p.daily_usage > 0 && daysLeft(p.current_stock, p.daily_usage) <= 2);
 }
 
-function setupLogout() {
-  const btn = document.getElementById('logout-btn');
-  if (btn) {
-    btn.addEventListener('click', async () => {
-      await api('POST', '/api/auth/logout');
-      window.location.href = '/';
-    });
-  }
-}
-
-function setupSidebarToggle() {
-  const btn = document.getElementById('sidebar-toggle');
-  if (btn) {
-    btn.addEventListener('click', () => {
-      document.getElementById('sidebar').classList.toggle('open');
-    });
-  }
-  document.getElementById('alert-btn')?.addEventListener('click', () => {
-    navigateTo('overview');
-  });
-}
-
-function navigateTo(section) {
-  currentSection = section;
-  document.querySelectorAll('.nav-item').forEach(item => {
-    item.classList.toggle('active', item.dataset.section === section);
-  });
-  const titles = {
-    overview: "Umumiy ko'rinish",
-    products: 'Mahsulotlar',
-    purchases: 'Sotib olishlar',
-    branches: 'Filiallar',
-    report: 'Hisobot'
-  };
-  const titleEl = document.getElementById('page-title');
-  if (titleEl) titleEl.textContent = titles[section] || section;
-  const content = document.getElementById('content');
-  content.innerHTML = '<div class="loading-state"><i class="ti ti-loader-2 spin"></i><span>Yuklanmoqda...</span></div>';
-  switch (section) {
-    case 'overview':  renderOverview(); break;
-    case 'products':  renderProducts(); break;
-    case 'purchases': renderPurchases(); break;
-    case 'branches':  renderBranches(); break;
-    case 'report':    renderReport(); break;
-  }
-}
-
-function updateAlertBadge(count) {
+function updateAlertBadge() {
+  const cnt = alertProducts().length;
   const badge = document.getElementById('alert-count');
   if (!badge) return;
-  if (count > 0) {
-    badge.textContent = count;
-    badge.style.display = 'flex';
-  } else {
-    badge.style.display = 'none';
+  badge.textContent = cnt;
+  badge.style.display = cnt > 0 ? 'flex' : 'none';
+}
+
+// ─── Navigation ──────────────────────────────────────────────────────────────
+function navigate(section) {
+  currentSection = section;
+  document.querySelectorAll('.nav-item[data-section]').forEach(el =>
+    el.classList.toggle('active', el.dataset.section === section));
+  const titles = {
+    overview: "Umumiy ko'rinish", products: 'Mahsulotlar',
+    purchases: 'Sotib olishlar',  branches: 'Filiallar', report: 'Hisobot'
+  };
+  document.getElementById('page-title').textContent = titles[section] || section;
+  if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
+  renderSection(section);
+}
+
+function renderSection(s) {
+  const c = document.getElementById('content');
+  switch (s) {
+    case 'overview':  renderOverview(c);  break;
+    case 'products':  renderProducts(c);  break;
+    case 'purchases': renderPurchases(c); break;
+    case 'branches':  renderBranches(c);  break;
+    case 'report':    renderReport(c);    break;
   }
 }
 
-// ─── Overview ─────────────────────────────────────────────────────────────────
-async function renderOverview() {
-  const content = document.getElementById('content');
-  try {
-    const [stats, alertList, lowStock] = await Promise.all([
-      api('GET', '/api/dashboard/stats'),
-      api('GET', '/api/dashboard/alerts'),
-      api('GET', '/api/dashboard/low-stock')
-    ]);
-    alerts = alertList;
-    updateAlertBadge(alerts.length);
+// ─── OVERVIEW ────────────────────────────────────────────────────────────────
+function renderOverview(c) {
+  const alerts   = alertProducts();
+  const lowStock = products.filter(p => p.daily_usage > 0 && daysLeft(p.current_stock, p.daily_usage) <= 7);
+  const urgentCount = alerts.length;
+  const soonCount   = products.filter(p => { const d = daysLeft(p.current_stock, p.daily_usage); return d > 2 && d <= 7; }).length;
+  const now = new Date();
+  const ym  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const monthlySpend = purchases
+    .filter(p => (p.purchase_date||'').startsWith(ym))
+    .reduce((s, p) => s + (p.quantity||0)*(p.unit_price||0), 0);
 
-    const alertRows = alertList.map(p => `
-      <tr>
-        <td><strong>${escHtml(p.name)}</strong></td>
-        <td>${escHtml(p.branch_name || '—')}</td>
-        <td>${p.current_stock} ${escHtml(p.unit || '')}</td>
-        <td>${p.daily_usage} ${escHtml(p.unit || '')}/kun</td>
-        <td><strong>${p.days_remaining}</strong> kun</td>
-        <td>${getStatusBadge(p.days_remaining)}</td>
-      </tr>
-    `).join('') || '<tr><td colspan="6"><div class="empty-state"><i class="ti ti-circle-check"></i>Hech qanday kritik mahsulot yoq</div></td></tr>';
-
-    const lowFiltered = lowStock.filter(p => p.days_remaining > 2);
-    const lowRows = lowFiltered.map(p => `
-      <tr>
-        <td><strong>${escHtml(p.name)}</strong></td>
-        <td>${escHtml(p.branch_name || '—')}</td>
-        <td>${p.current_stock} ${escHtml(p.unit || '')}</td>
-        <td>${p.daily_usage} ${escHtml(p.unit || '')}/kun</td>
-        <td><strong>${p.days_remaining}</strong> kun</td>
-        <td>${getStatusBadge(p.days_remaining)}</td>
-      </tr>
-    `).join('') || '<tr><td colspan="6"><div class="empty-state"><i class="ti ti-check"></i>Kamomad yoq</div></td></tr>';
-
-    content.innerHTML = `
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon teal"><i class="ti ti-box"></i></div>
-          <div>
-            <div class="stat-label">Jami mahsulotlar</div>
-            <div class="stat-value">${stats.total_products}</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon red"><i class="ti ti-alert-triangle"></i></div>
-          <div>
-            <div class="stat-label">Shoshilinch ogohlantirishlar</div>
-            <div class="stat-value ${stats.alert_count > 0 ? 'red' : ''}">${stats.alert_count}</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon blue"><i class="ti ti-building-store"></i></div>
-          <div>
-            <div class="stat-label">Filiallar soni</div>
-            <div class="stat-value">${stats.total_branches}</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon amber"><i class="ti ti-currency-dollar"></i></div>
-          <div>
-            <div class="stat-label">Oylik xarajat</div>
-            <div class="stat-value" style="font-size:16px">${formatCurrency(stats.monthly_spend)}</div>
-          </div>
-        </div>
-      </div>
-      <div class="section-grid">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title" style="color:var(--red)">
-              <i class="ti ti-alert-triangle"></i> Kritik mahsulotlar (2 kun va kam)
-            </div>
-            <span class="badge badge-red">${alertList.length} ta</span>
-          </div>
-          <div class="card-body">
-            <div class="table-wrap">
-              <table>
-                <thead><tr>
-                  <th>Mahsulot</th><th>Filial</th><th>Omborda</th><th>Kunlik sarflanish</th><th>Qolgan kun</th><th>Holat</th>
-                </tr></thead>
-                <tbody>${alertRows}</tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title" style="color:var(--amber)">
-              <i class="ti ti-clock-alert"></i> Kam qolgan mahsulotlar (7 kun va kam)
-            </div>
-            <span class="badge badge-amber">${lowFiltered.length} ta</span>
-          </div>
-          <div class="card-body">
-            <div class="table-wrap">
-              <table>
-                <thead><tr>
-                  <th>Mahsulot</th><th>Filial</th><th>Omborda</th><th>Kunlik sarflanish</th><th>Qolgan kun</th><th>Holat</th>
-                </tr></thead>
-                <tbody>${lowRows}</tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  } catch (e) {
-    content.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i>Malumot yuklashda xato</div>';
-  }
-}
-
-// ─── Products ─────────────────────────────────────────────────────────────────
-function renderProducts() {
-  const content = document.getElementById('content');
-  const branchOptions = branches.map(b => `<option value="${b.id}">${escHtml(b.name)}</option>`).join('');
-  const catOptions = categories.map(c => `<option value="${escHtml(c.name)}">${escHtml(c.name)}</option>`).join('');
-
-  content.innerHTML = `
-    <div class="section-header">
-      <div class="section-title">Mahsulotlar</div>
-      <button class="btn btn-primary" onclick="openProductModal()">
-        <i class="ti ti-plus"></i> Mahsulot qoshish
-      </button>
+  c.innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-icon teal"><i class="ti ti-box"></i></div>
+        <div><div class="stat-label">Jami mahsulot</div><div class="stat-value">${products.length}</div></div></div>
+      <div class="stat-card"><div class="stat-icon red"><i class="ti ti-alarm"></i></div>
+        <div><div class="stat-label">Shoshilinch (≤2 kun)</div>
+          <div class="stat-value" style="color:var(--red)">${urgentCount}</div></div></div>
+      <div class="stat-card"><div class="stat-icon amber"><i class="ti ti-clock"></i></div>
+        <div><div class="stat-label">Kam qoldi (≤7 kun)</div>
+          <div class="stat-value" style="color:var(--amber)">${soonCount}</div></div></div>
+      <div class="stat-card"><div class="stat-icon blue"><i class="ti ti-coin"></i></div>
+        <div><div class="stat-label">Oylik xarajat</div>
+          <div class="stat-value" style="font-size:18px">${fmtMoney(monthlySpend)}</div></div></div>
     </div>
-    <div class="filter-bar">
-      <select class="form-select" id="filter-branch" onchange="filterProducts()">
-        <option value="">Barcha filiallar</option>
-        ${branchOptions}
-      </select>
-      <select class="form-select" id="filter-category" onchange="filterProducts()">
-        <option value="">Barcha kategoriyalar</option>
-        ${catOptions}
-      </select>
-      <input class="form-input" id="filter-search" placeholder="Mahsulot nomi boyicha qidirish..." oninput="filterProducts()" />
+
+    ${urgentCount ? `
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px">
+      <i class="ti ti-bell-ringing" style="font-size:22px;color:var(--red);flex-shrink:0;margin-top:2px"></i>
+      <div>
+        <div style="font-size:14px;font-weight:700;color:#991b1b;margin-bottom:4px">⚠️ ${urgentCount} ta mahsulot tugab qolmoqda!</div>
+        <div style="font-size:12px;color:#b91c1c">${alerts.map(a=>`<b>${esc(a.name)}</b> (${esc(brName(a.branch_id))}) — ${daysLeft(a.current_stock,a.daily_usage)<=0?'Tugagan':daysLeft(a.current_stock,a.daily_usage).toFixed(1)+' kun'}`).join(' · ')}</div>
+      </div>
+    </div>` : ''}
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:15px;font-weight:700"><i class="ti ti-clock" style="color:#94a3b8;margin-right:6px"></i>Kam qolgan mahsulotlar (≤7 kun)</div>
+      <button class="btn btn-primary btn-sm" onclick="openAddProduct()"><i class="ti ti-plus"></i>Qo'shish</button>
     </div>
     <div class="card">
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Mahsulot</th>
-            <th>Filial</th>
-            <th>Kategoriya</th>
-            <th>Birlik</th>
-            <th>Kunlik sarflanish</th>
-            <th>Omborda</th>
-            <th>Qolgan kunlar</th>
-            <th>Holat</th>
-            <th>Amallar</th>
+            <th>Mahsulot</th><th>Filial</th><th>Omborda</th><th>Kunlik sarflanish</th><th>Qolgan kun</th><th>Holat</th><th></th>
           </tr></thead>
-          <tbody id="products-tbody"></tbody>
+          <tbody>
+            ${lowStock.length ? lowStock.map(p => {
+              const d = daysLeft(p.current_stock, p.daily_usage);
+              return `<tr>
+                <td><div style="font-weight:600">${esc(p.name)}</div>${p.category?`<div style="font-size:11px;color:#94a3b8">${esc(p.category)}</div>`:''}</td>
+                <td><span class="badge badge-gray">${esc(p.branch_name||brName(p.branch_id))}</span></td>
+                <td style="font-weight:600;color:${daysColor(d)}">${p.current_stock} ${esc(p.unit)}</td>
+                <td style="color:#64748b">${p.daily_usage} ${esc(p.unit)}/kun</td>
+                <td style="font-weight:700;color:${daysColor(d)}">${isFinite(d)?d.toFixed(1)+' kun':'—'}</td>
+                <td>${statusBadge(d)}</td>
+                <td><button class="btn btn-sm btn-primary" onclick="openAddPurchase(${p.id})"><i class="ti ti-shopping-cart"></i>Sotib olish</button></td>
+              </tr>`;
+            }).join('') : `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>Barcha mahsulotlar yetarli!</p></div></td></tr>`}
+          </tbody>
         </table>
       </div>
-    </div>
-  `;
-  filterProducts();
+    </div>`;
 }
 
-function filterProducts() {
-  const branchId = document.getElementById('filter-branch')?.value || '';
-  const category = document.getElementById('filter-category')?.value || '';
-  const search = (document.getElementById('filter-search')?.value || '').toLowerCase();
+// ─── PRODUCTS ────────────────────────────────────────────────────────────────
+function renderProducts(c) {
+  const brOpts = branches.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  const catSet = [...new Set(products.map(p => p.category).filter(Boolean))];
+  const catOpts = catSet.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 
-  let filtered = products.filter(p => {
-    if (branchId && String(p.branch_id) !== branchId) return false;
-    if (category && p.category !== category) return false;
-    if (search && !p.name.toLowerCase().includes(search)) return false;
-    return true;
-  });
+  c.innerHTML = `
+    <div class="section-header">
+      <div class="section-title">Barcha mahsulotlar</div>
+      <button class="btn btn-primary" onclick="openAddProduct()"><i class="ti ti-plus"></i>Qo'shish</button>
+    </div>
+    <div class="filter-bar">
+      <select class="form-select" id="pf-br" onchange="applyProductFilter()"><option value="">Barcha filiallar</option>${brOpts}</select>
+      <select class="form-select" id="pf-cat" onchange="applyProductFilter()"><option value="">Barcha kategoriyalar</option>${catOpts}</select>
+      <input class="form-input" id="pf-q" placeholder="Qidirish..." oninput="applyProductFilter()">
+    </div>
+    <div class="card"><div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Mahsulot</th><th>Kategoriya</th><th>Filial</th><th>Omborda</th><th>Kunlik sarflanish</th><th>Qolgan kun</th><th>Holat</th><th></th>
+        </tr></thead>
+        <tbody id="products-tbody"></tbody>
+      </table>
+    </div></div>`;
+  applyProductFilter();
+}
 
+function applyProductFilter() {
+  const bf  = document.getElementById('pf-br')?.value  || '';
+  const cf  = document.getElementById('pf-cat')?.value || '';
+  const qf  = (document.getElementById('pf-q')?.value || '').toLowerCase();
+  const list = products.filter(p =>
+    (!bf || p.branch_id == bf) &&
+    (!cf || p.category === cf) &&
+    (!qf || (p.name||'').toLowerCase().includes(qf))
+  );
   const tbody = document.getElementById('products-tbody');
   if (!tbody) return;
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-inbox"></i>Mahsulot topilmadi</div></td></tr>';
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="ti ti-inbox"></i><p>Mahsulot topilmadi</p></div></td></tr>`;
     return;
   }
-
-  tbody.innerHTML = filtered.map(p => {
-    const days = getDaysRemaining(p);
-    return `
-      <tr>
-        <td><strong>${escHtml(p.name)}</strong>${p.note ? '<br><small style="color:var(--text-muted)">' + escHtml(p.note) + '</small>' : ''}</td>
-        <td>${escHtml(p.branch_name || '—')}</td>
-        <td>${p.category ? '<span class="badge badge-gray">' + escHtml(p.category) + '</span>' : '—'}</td>
-        <td>${escHtml(p.unit || '—')}</td>
-        <td>${p.daily_usage}</td>
-        <td><strong>${p.current_stock}</strong></td>
-        <td><strong>${days === 9999 ? '∞' : days}</strong> kun</td>
-        <td>${getStatusBadge(days)}</td>
-        <td>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-secondary btn-sm btn-icon" onclick="openProductModal(${p.id})" title="Tahrirlash">
-              <i class="ti ti-pencil"></i>
-            </button>
-            <button class="btn btn-danger btn-sm btn-icon" onclick="deleteProduct(${p.id})" title="Ochirish">
-              <i class="ti ti-trash"></i>
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
+  tbody.innerHTML = list.map(p => {
+    const d = daysLeft(p.current_stock, p.daily_usage);
+    return `<tr>
+      <td><div style="font-weight:600">${esc(p.name)}</div>${p.note?`<div style="font-size:11px;color:#94a3b8">${esc(p.note)}</div>`:''}</td>
+      <td>${p.category?`<span class="badge badge-blue">${esc(p.category)}</span>`:'—'}</td>
+      <td><span class="badge badge-gray">${esc(p.branch_name||brName(p.branch_id))}</span></td>
+      <td style="font-weight:600">${p.current_stock} ${esc(p.unit)}</td>
+      <td style="color:#64748b">${p.daily_usage} ${esc(p.unit)}/kun</td>
+      <td style="font-weight:700;color:${daysColor(d)}">${isFinite(d)?d.toFixed(1):'—'}</td>
+      <td>${statusBadge(d)}</td>
+      <td style="white-space:nowrap;text-align:right">
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openAddPurchase(${p.id})" title="Sotib olish"><i class="ti ti-shopping-cart"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openEditProduct(${p.id})" title="Tahrirlash"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-sm btn-danger btn-icon" onclick="delProduct(${p.id})" title="O'chirish"><i class="ti ti-trash"></i></button>
+      </td>
+    </tr>`;
   }).join('');
 }
 
-function openProductModal(id) {
-  const product = id ? products.find(p => p.id === id) : null;
-  const title = product ? 'Mahsulotni tahrirlash' : 'Mahsulot qoshish';
-
-  const branchOptions = branches.map(b =>
-    '<option value="' + b.id + '"' + (product && product.branch_id === b.id ? ' selected' : '') + '>' + escHtml(b.name) + '</option>'
-  ).join('');
-
-  const catOptions = categories.map(c =>
-    '<option value="' + escHtml(c.name) + '"' + (product && product.category === c.name ? ' selected' : '') + '>' + escHtml(c.name) + '</option>'
-  ).join('');
-
-  openModal(`
-    <div class="modal-header">
-      <div class="modal-title">${title}</div>
-      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="modal-body">
-      <form id="product-form" onsubmit="saveProduct(event, ${id || 'null'})">
-        <div class="form-group">
-          <label class="form-label">Mahsulot nomi *</label>
-          <input class="form-control" name="name" required value="${product ? escHtml(product.name) : ''}" placeholder="Mahsulot nomi" />
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Filial</label>
-            <select class="form-control" name="branch_id">
-              <option value="">Tanlang</option>
-              ${branchOptions}
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Kategoriya</label>
-            <select class="form-control" name="category">
-              <option value="">Tanlang</option>
-              ${catOptions}
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Birlik</label>
-            <input class="form-control" name="unit" value="${product ? escHtml(product.unit || '') : ''}" placeholder="kg, dona, l ..." />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Kunlik sarflanish</label>
-            <input class="form-control" type="number" step="0.1" min="0" name="daily_usage" value="${product ? product.daily_usage : 1}" />
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Joriy zaxira</label>
-            <input class="form-control" type="number" step="0.1" min="0" name="current_stock" value="${product ? product.current_stock : 0}" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Minimal zaxira</label>
-            <input class="form-control" type="number" step="0.1" min="0" name="min_stock" value="${product ? product.min_stock : 0}" />
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Izoh</label>
-          <textarea class="form-control" name="note" rows="2" placeholder="Qoshimcha malumot...">${product ? escHtml(product.note || '') : ''}</textarea>
-        </div>
-        <div class="form-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()">Bekor qilish</button>
-          <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i> Saqlash</button>
-        </div>
-      </form>
-    </div>
-  `);
-}
-
-async function saveProduct(e, id) {
-  e.preventDefault();
-  const form = e.target;
-  const data = {
-    name: form.name.value,
-    branch_id: form.branch_id.value || null,
-    category: form.category.value,
-    unit: form.unit.value,
-    daily_usage: parseFloat(form.daily_usage.value) || 1,
-    current_stock: parseFloat(form.current_stock.value) || 0,
-    min_stock: parseFloat(form.min_stock.value) || 0,
-    note: form.note.value
-  };
-  try {
-    if (id) {
-      const updated = await api('PUT', '/api/products/' + id, data);
-      const idx = products.findIndex(p => p.id === id);
-      if (idx !== -1) products[idx] = updated;
-    } else {
-      const created = await api('POST', '/api/products', data);
-      products.push(created);
-    }
-    closeModal();
-    showToast(id ? 'Mahsulot yangilandi' : 'Mahsulot qoshildi', 'success');
-    filterProducts();
-    const alertData = await api('GET', '/api/dashboard/alerts');
-    alerts = alertData;
-    updateAlertBadge(alerts.length);
-  } catch (err) {
-    showToast('Xato: ' + err.message, 'error');
-  }
-}
-
-async function deleteProduct(id) {
-  if (!confirm("Bu mahsulotni ochirishni tasdiqlaysizmi?")) return;
-  try {
-    await api('DELETE', '/api/products/' + id);
-    products = products.filter(p => p.id !== id);
-    purchases = purchases.filter(p => p.product_id !== id);
-    showToast("Mahsulot ochirildi", 'success');
-    filterProducts();
-  } catch (err) {
-    showToast('Xato: ' + err.message, 'error');
-  }
-}
-
-// ─── Purchases ────────────────────────────────────────────────────────────────
-function renderPurchases() {
-  const content = document.getElementById('content');
-  const branchOptions = branches.map(b => '<option value="' + b.id + '">' + escHtml(b.name) + '</option>').join('');
-
-  content.innerHTML = `
+// ─── PURCHASES ───────────────────────────────────────────────────────────────
+function renderPurchases(c) {
+  const brOpts = branches.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  c.innerHTML = `
     <div class="section-header">
-      <div class="section-title">Sotib olishlar</div>
-      <button class="btn btn-primary" onclick="openPurchaseModal()">
-        <i class="ti ti-plus"></i> Xarid qoshish
-      </button>
+      <div class="section-title">Sotib olishlar tarixi</div>
+      <button class="btn btn-primary" onclick="openAddPurchase(null)"><i class="ti ti-plus"></i>Qo'shish</button>
     </div>
     <div class="filter-bar">
-      <select class="form-select" id="pur-filter-branch" onchange="filterPurchases()">
-        <option value="">Barcha filiallar</option>
-        ${branchOptions}
-      </select>
-      <input class="form-input" type="date" id="pur-filter-from" onchange="filterPurchases()" style="width:160px" />
-      <input class="form-input" type="date" id="pur-filter-to" onchange="filterPurchases()" style="width:160px" />
-      <button class="btn btn-secondary" onclick="clearPurFilters()"><i class="ti ti-x"></i> Tozalash</button>
+      <select class="form-select" id="xf-br" onchange="applyPurchaseFilter()"><option value="">Barcha filiallar</option>${brOpts}</select>
+      <input type="date" class="form-input" id="xf-from" onchange="applyPurchaseFilter()">
+      <input type="date" class="form-input" id="xf-to"   onchange="applyPurchaseFilter()">
+      <input class="form-input" id="xf-q" placeholder="Qidirish..." oninput="applyPurchaseFilter()">
     </div>
-    <div class="card">
-      <div class="table-wrap">
-        <table>
-          <thead><tr>
-            <th>Sana</th>
-            <th>Mahsulot</th>
-            <th>Filial</th>
-            <th>Miqdor</th>
-            <th>Narx (som)</th>
-            <th>Jami</th>
-            <th>Yetkazuvchi</th>
-            <th>Amallar</th>
-          </tr></thead>
-          <tbody id="purchases-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-  `;
-  filterPurchases();
+    <div class="card"><div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Sana</th><th>Mahsulot</th><th>Filial</th><th>Miqdor</th><th>Birlik narx</th><th>Jami</th><th>Yetkazuvchi</th><th></th>
+        </tr></thead>
+        <tbody id="purchases-tbody"></tbody>
+      </table>
+    </div></div>
+    <div id="purchases-total" style="text-align:right;padding:8px 20px;font-size:13px;color:#64748b"></div>`;
+  applyPurchaseFilter();
 }
 
-function clearPurFilters() {
-  const fromEl = document.getElementById('pur-filter-from');
-  const toEl = document.getElementById('pur-filter-to');
-  const branchEl = document.getElementById('pur-filter-branch');
-  if (fromEl) fromEl.value = '';
-  if (toEl) toEl.value = '';
-  if (branchEl) branchEl.value = '';
-  filterPurchases();
-}
-
-function filterPurchases() {
-  const branchId = document.getElementById('pur-filter-branch')?.value || '';
-  const dateFrom = document.getElementById('pur-filter-from')?.value || '';
-  const dateTo = document.getElementById('pur-filter-to')?.value || '';
-
-  let filtered = purchases.filter(p => {
-    if (branchId && String(p.branch_id) !== branchId) return false;
-    if (dateFrom && p.purchase_date < dateFrom) return false;
-    if (dateTo && p.purchase_date > dateTo) return false;
-    return true;
-  });
-
+function applyPurchaseFilter() {
+  const bf  = document.getElementById('xf-br')?.value   || '';
+  const df  = document.getElementById('xf-from')?.value || '';
+  const dt  = document.getElementById('xf-to')?.value   || '';
+  const qf  = (document.getElementById('xf-q')?.value   || '').toLowerCase();
+  const list = purchases.filter(p =>
+    (!bf || p.branch_id == bf) &&
+    (!df || (p.purchase_date||'') >= df) &&
+    (!dt || (p.purchase_date||'') <= dt) &&
+    (!qf || (p.product_name||'').toLowerCase().includes(qf) || (p.supplier||'').toLowerCase().includes(qf))
+  );
   const tbody = document.getElementById('purchases-tbody');
   if (!tbody) return;
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-inbox"></i>Xarid topilmadi</div></td></tr>';
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="ti ti-shopping-cart-off"></i><p>Sotib olish topilmadi</p></div></td></tr>`;
+    const tot = document.getElementById('purchases-total');
+    if (tot) tot.textContent = '';
     return;
   }
-
-  tbody.innerHTML = filtered.map(p => `
-    <tr>
-      <td>${formatDate(p.purchase_date)}</td>
-      <td><strong>${escHtml(p.product_name || '—')}</strong></td>
-      <td>${escHtml(p.branch_name || '—')}</td>
-      <td>${p.quantity} ${escHtml(p.unit || '')}</td>
-      <td>${formatCurrency(p.unit_price)}</td>
-      <td><strong>${formatCurrency(p.quantity * p.unit_price)}</strong></td>
-      <td>${escHtml(p.supplier || '—')}</td>
-      <td>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-secondary btn-sm btn-icon" onclick="openPurchaseModal(${p.id})" title="Tahrirlash">
-            <i class="ti ti-pencil"></i>
-          </button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="deletePurchase(${p.id})" title="Ochirish">
-            <i class="ti ti-trash"></i>
-          </button>
-        </div>
+  let total = 0;
+  tbody.innerHTML = list.map(p => {
+    const sum = (p.quantity||0) * (p.unit_price||0);
+    total += sum;
+    return `<tr>
+      <td style="color:#64748b">${esc(p.purchase_date)}</td>
+      <td style="font-weight:600">${esc(p.product_name||'—')}</td>
+      <td><span class="badge badge-gray">${esc(p.branch_name||'—')}</span></td>
+      <td>${p.quantity} ${esc(p.unit||'')}</td>
+      <td>${fmtMoney(p.unit_price)}</td>
+      <td style="font-weight:700;color:var(--teal)">${fmtMoney(sum)}</td>
+      <td style="color:#64748b">${esc(p.supplier||'—')}</td>
+      <td style="white-space:nowrap;text-align:right">
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openEditPurchase(${p.id})"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-sm btn-danger btn-icon" onclick="delPurchase(${p.id})"><i class="ti ti-trash"></i></button>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
+  const tot = document.getElementById('purchases-total');
+  if (tot) tot.innerHTML = `Jami: <strong style="color:var(--teal);font-size:15px">${fmtMoney(total)}</strong> (${list.length} ta yozuv)`;
 }
 
-function openPurchaseModal(id) {
-  const purchase = id ? purchases.find(p => p.id === id) : null;
-  const title = purchase ? 'Xaridni tahrirlash' : 'Xarid qoshish';
-
-  const productsByBranch = {};
-  branches.forEach(b => { productsByBranch[b.id] = { name: b.name, prods: [] }; });
-  products.forEach(p => {
-    if (p.branch_id && productsByBranch[p.branch_id]) {
-      productsByBranch[p.branch_id].prods.push(p);
-    }
-  });
-
-  let productOptions = '';
-  Object.values(productsByBranch).forEach(g => {
-    if (g.prods.length > 0) {
-      productOptions += '<optgroup label="' + escHtml(g.name) + '">';
-      g.prods.forEach(p => {
-        productOptions += '<option value="' + p.id + '"' + (purchase && purchase.product_id === p.id ? ' selected' : '') + '>' + escHtml(p.name) + '</option>';
-      });
-      productOptions += '</optgroup>';
-    }
-  });
-
-  const today = new Date().toISOString().split('T')[0];
-
-  openModal(`
-    <div class="modal-header">
-      <div class="modal-title">${title}</div>
-      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+// ─── BRANCHES ────────────────────────────────────────────────────────────────
+function renderBranches(c) {
+  c.innerHTML = `
+    <div class="section-header">
+      <div class="section-title">Filiallar</div>
+      <button class="btn btn-primary" onclick="openAddBranch()"><i class="ti ti-plus"></i>Filial qo'shish</button>
     </div>
-    <div class="modal-body">
-      <form id="purchase-form" onsubmit="savePurchase(event, ${id || 'null'})">
-        <div class="form-group">
-          <label class="form-label">Mahsulot *</label>
-          <select class="form-control" name="product_id" required>
-            <option value="">Mahsulot tanlang</option>
-            ${productOptions}
-          </select>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Miqdor *</label>
-            <input class="form-control" type="number" step="0.1" min="0.1" name="quantity" required
-              value="${purchase ? purchase.quantity : ''}" placeholder="0" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Birlik narxi (som)</label>
-            <input class="form-control" type="number" step="1" min="0" name="unit_price"
-              value="${purchase ? purchase.unit_price : ''}" placeholder="0" />
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Xarid sanasi</label>
-            <input class="form-control" type="date" name="purchase_date"
-              value="${purchase ? purchase.purchase_date : today}" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Yetkazuvchi</label>
-            <input class="form-control" name="supplier"
-              value="${purchase ? escHtml(purchase.supplier || '') : ''}" placeholder="Yetkazuvchi nomi" />
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Izoh</label>
-          <textarea class="form-control" name="note" rows="2">${purchase ? escHtml(purchase.note || '') : ''}</textarea>
-        </div>
-        <div class="form-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()">Bekor qilish</button>
-          <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i> Saqlash</button>
-        </div>
-      </form>
-    </div>
-  `);
-}
-
-async function savePurchase(e, id) {
-  e.preventDefault();
-  const form = e.target;
-  const data = {
-    product_id: parseInt(form.product_id.value),
-    quantity: parseFloat(form.quantity.value),
-    unit_price: parseFloat(form.unit_price.value) || 0,
-    purchase_date: form.purchase_date.value,
-    supplier: form.supplier.value,
-    note: form.note.value
-  };
-  try {
-    if (id) {
-      const updated = await api('PUT', '/api/purchases/' + id, data);
-      const idx = purchases.findIndex(p => p.id === id);
-      if (idx !== -1) purchases[idx] = updated;
-    } else {
-      const created = await api('POST', '/api/purchases', data);
-      purchases.unshift(created);
-    }
-    products = await api('GET', '/api/products');
-    closeModal();
-    showToast(id ? 'Xarid yangilandi' : 'Xarid qoshildi', 'success');
-    filterPurchases();
-    const alertData = await api('GET', '/api/dashboard/alerts');
-    alerts = alertData;
-    updateAlertBadge(alerts.length);
-  } catch (err) {
-    showToast('Xato: ' + err.message, 'error');
-  }
-}
-
-async function deletePurchase(id) {
-  if (!confirm("Bu xaridni ochirishni tasdiqlaysizmi? Mahsulot zaxirasi ham kamayadi.")) return;
-  try {
-    await api('DELETE', '/api/purchases/' + id);
-    purchases = purchases.filter(p => p.id !== id);
-    products = await api('GET', '/api/products');
-    showToast("Xarid ochirildi", 'success');
-    filterPurchases();
-  } catch (err) {
-    showToast('Xato: ' + err.message, 'error');
-  }
-}
-
-// ─── Branches ─────────────────────────────────────────────────────────────────
-async function renderBranches() {
-  const content = document.getElementById('content');
-  try {
-    branches = await api('GET', '/api/branches');
-    const allProducts = await api('GET', '/api/products');
-    const alertList = await api('GET', '/api/dashboard/alerts');
-    const alertProductIds = new Set(alertList.map(p => p.id));
-
-    const cards = branches.map(b => {
-      const branchProds = allProducts.filter(p => p.branch_id === b.id);
-      const lowCount = branchProds.filter(p => alertProductIds.has(p.id)).length;
-      return `
-        <div class="branch-card" onclick="showBranchProducts(${b.id})">
+    <div class="branches-grid">
+      ${branches.map(b => {
+        const bProds  = products.filter(p => p.branch_id == b.id);
+        const urgCnt  = bProds.filter(p => daysLeft(p.current_stock, p.daily_usage) <= 2).length;
+        const totSpend= purchases.filter(p => p.branch_id == b.id).reduce((s, p) => s + (p.quantity||0)*(p.unit_price||0), 0);
+        return `<div class="branch-card">
           <div class="branch-card-header">
             <div class="branch-icon"><i class="ti ti-building-store"></i></div>
-            <div class="branch-actions" onclick="event.stopPropagation()">
-              <button class="btn btn-secondary btn-sm btn-icon" onclick="openBranchModal(${b.id})" title="Tahrirlash">
-                <i class="ti ti-pencil"></i>
-              </button>
-              <button class="btn btn-danger btn-sm btn-icon" onclick="deleteBranch(${b.id})" title="Ochirish">
-                <i class="ti ti-trash"></i>
-              </button>
+            <div class="branch-actions">
+              ${urgCnt?`<span class="badge badge-red"><i class="ti ti-alarm"></i>${urgCnt} shoshilinch</span>`:''}
+              <button class="btn btn-sm btn-secondary btn-icon" onclick="openEditBranch(${b.id})"><i class="ti ti-edit"></i></button>
+              <button class="btn btn-sm btn-danger btn-icon" onclick="delBranch(${b.id})"><i class="ti ti-trash"></i></button>
             </div>
           </div>
-          <div class="branch-name">${escHtml(b.name)}</div>
-          <div class="branch-address"><i class="ti ti-map-pin" style="font-size:12px"></i> ${escHtml(b.address || '—')}</div>
+          <div class="branch-name">${esc(b.name)}</div>
+          <div class="branch-address">${esc(b.address||'—')}</div>
           <div class="branch-meta">
-            ${b.manager ? '<div class="branch-meta-item"><i class="ti ti-user"></i> ' + escHtml(b.manager) + '</div>' : ''}
-            ${b.phone ? '<div class="branch-meta-item"><i class="ti ti-phone"></i> ' + escHtml(b.phone) + '</div>' : ''}
+            ${b.manager?`<div class="branch-meta-item"><i class="ti ti-user" style="font-size:13px"></i>${esc(b.manager)}</div>`:''}
+            ${b.phone?`<div class="branch-meta-item"><i class="ti ti-phone" style="font-size:13px"></i>${esc(b.phone)}</div>`:''}
           </div>
           <div class="branch-stats">
-            <div class="branch-stat">
-              <div class="branch-stat-value">${branchProds.length}</div>
-              <div class="branch-stat-label">Mahsulot</div>
-            </div>
-            <div class="branch-stat">
-              <div class="branch-stat-value" style="color:${lowCount > 0 ? 'var(--red)' : 'var(--teal)'}">${lowCount}</div>
-              <div class="branch-stat-label">Kritik</div>
-            </div>
+            <div class="branch-stat"><div class="branch-stat-value">${bProds.length}</div><div class="branch-stat-label">Mahsulot turi</div></div>
+            <div class="branch-stat"><div class="branch-stat-value" style="color:var(--teal);font-size:16px">${Number(totSpend).toLocaleString('uz-UZ')}</div><div class="branch-stat-label">Jami xarajat (so'm)</div></div>
           </div>
-        </div>
-      `;
-    }).join('');
-
-    content.innerHTML = `
-      <div class="section-header">
-        <div class="section-title">Filiallar</div>
-        <button class="btn btn-primary" onclick="openBranchModal()">
-          <i class="ti ti-plus"></i> Filial qoshish
-        </button>
-      </div>
-      <div class="branches-grid">${cards || '<div class="empty-state"><i class="ti ti-building-store"></i>Hech qanday filial yoq</div>'}</div>
-    `;
-  } catch (e) {
-    content.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i>Xato yuz berdi</div>';
-  }
+          ${bProds.length ? `<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+            ${bProds.slice(0,5).map(p => {
+              const d = daysLeft(p.current_stock, p.daily_usage);
+              return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f8fafc;gap:8px">
+                <span style="font-size:13px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</span>
+                ${statusBadge(d)}
+              </div>`;
+            }).join('')}
+            ${bProds.length>5?`<div style="font-size:12px;color:#94a3b8;margin-top:6px">+${bProds.length-5} ta boshqa</div>`:''}
+          </div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
 }
 
-function showBranchProducts(branchId) {
-  const branch = branches.find(b => b.id === branchId);
-  if (!branch) return;
-  const branchProds = products.filter(p => p.branch_id === branchId);
+// ─── REPORT ───────────────────────────────────────────────────────────────────
+function renderReport(c) {
+  const now = new Date();
+  let selYear  = now.getFullYear();
+  let selMonth = now.getMonth() + 1;
 
-  if (branchProds.length === 0) {
-    showToast('Bu filialda mahsulot yoq', 'info');
+  const monthOpts = Array.from({length:12},(_,i) => {
+    const d = new Date(selYear, i);
+    return `<option value="${i+1}" ${i+1===selMonth?'selected':''}>${d.toLocaleString('uz-UZ',{month:'long'})}</option>`;
+  }).join('');
+  const yearOpts = [selYear-1, selYear, selYear+1].map(y => `<option value="${y}" ${y===selYear?'selected':''}>${y}</option>`).join('');
+
+  c.innerHTML = `
+    <div class="section-header">
+      <div class="section-title">Oylik hisobot</div>
+      <div style="display:flex;gap:8px">
+        <select class="form-select" id="rep-month" onchange="applyReport()">${monthOpts}</select>
+        <select class="form-select" id="rep-year"  onchange="applyReport()">${yearOpts}</select>
+      </div>
+    </div>
+    <div id="report-body"></div>`;
+  applyReport();
+}
+
+function applyReport() {
+  const month  = parseInt(document.getElementById('rep-month')?.value || new Date().getMonth()+1);
+  const year   = parseInt(document.getElementById('rep-year')?.value  || new Date().getFullYear());
+  const ym     = `${year}-${String(month).padStart(2,'0')}`;
+  const body   = document.getElementById('report-body');
+  if (!body) return;
+
+  const monthPurchases = purchases.filter(p => (p.purchase_date||'').startsWith(ym));
+  const totalAll = monthPurchases.reduce((s, p) => s + (p.quantity||0)*(p.unit_price||0), 0);
+
+  const branchStats = branches.map(b => {
+    const bPurch = monthPurchases.filter(p => p.branch_id == b.id);
+    const total  = bPurch.reduce((s, p) => s + (p.quantity||0)*(p.unit_price||0), 0);
+    const topMap = {};
+    bPurch.forEach(p => { topMap[p.product_name] = (topMap[p.product_name]||0) + (p.quantity||0)*(p.unit_price||0); });
+    const top = Object.entries(topMap).sort((a,b)=>b[1]-a[1])[0]?.[0] || '—';
+    return { ...b, purchase_count: bPurch.length, total_amount: total, top_product: top };
+  }).sort((a,b) => b.total_amount - a.total_amount);
+
+  body.innerHTML = `
+    <div class="stats-grid" style="margin-bottom:16px">
+      <div class="stat-card"><div class="stat-icon blue"><i class="ti ti-building-store"></i></div>
+        <div><div class="stat-label">Faol filiallar</div><div class="stat-value">${branchStats.filter(b=>b.total_amount>0).length}</div></div></div>
+      <div class="stat-card"><div class="stat-icon teal"><i class="ti ti-shopping-cart"></i></div>
+        <div><div class="stat-label">Jami sotib olishlar</div><div class="stat-value">${monthPurchases.length}</div></div></div>
+      <div class="stat-card"><div class="stat-icon amber"><i class="ti ti-coin"></i></div>
+        <div><div class="stat-label">Jami xarajat</div><div class="stat-value" style="font-size:18px">${fmtMoney(totalAll)}</div></div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Filial</th><th>Sotib olishlar</th><th>Eng ko'p olingan</th><th>Jami xarajat</th><th>Ulush</th></tr></thead>
+        <tbody>
+          ${branchStats.map(b => {
+            const pct = totalAll > 0 ? (b.total_amount/totalAll*100).toFixed(1) : 0;
+            return `<tr>
+              <td style="font-weight:600">${esc(b.name)}</td>
+              <td>${b.purchase_count}</td>
+              <td style="color:#64748b">${esc(b.top_product)}</td>
+              <td style="font-weight:700;color:var(--teal)">${fmtMoney(b.total_amount)}</td>
+              <td><div style="display:flex;align-items:center;gap:8px">
+                <div style="flex:1;height:6px;background:#f1f5f9;border-radius:3px;min-width:60px">
+                  <div style="height:100%;background:var(--teal);border-radius:3px;width:${pct}%"></div>
+                </div>
+                <span style="font-size:12px;color:#64748b;flex-shrink:0">${pct}%</span>
+              </div></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:700;font-size:15px">Batafsil sotib olishlar</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Sana</th><th>Mahsulot</th><th>Filial</th><th>Miqdor</th><th>Narx</th><th>Jami</th><th>Yetkazuvchi</th></tr></thead>
+        <tbody>
+          ${monthPurchases.length ? monthPurchases.map(p => `<tr>
+            <td style="color:#64748b">${esc(p.purchase_date)}</td>
+            <td style="font-weight:600">${esc(p.product_name||'—')}</td>
+            <td><span class="badge badge-gray">${esc(p.branch_name||'—')}</span></td>
+            <td>${p.quantity} ${esc(p.unit||'')}</td>
+            <td>${fmtMoney(p.unit_price)}</td>
+            <td style="font-weight:600;color:var(--teal)">${fmtMoney((p.quantity||0)*(p.unit_price||0))}</td>
+            <td style="color:#64748b">${esc(p.supplier||'—')}</td>
+          </tr>`).join('') : `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-calendar-off"></i><p>Bu oyda sotib olish yo'q</p></div></td></tr>`}
+        </tbody>
+      </table></div>
+    </div>`;
+}
+
+// ─── CRUD: Products ───────────────────────────────────────────────────────────
+function openAddProduct() {
+  const brOpts  = branches.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  const catOpts = ['Oziq-ovqat', "Yoqilg'i", "Uy-ro'zg'or", 'Elektr', 'Ofis', 'Boshqa'].map(c => `<option>${esc(c)}</option>`).join('');
+  openModal(`
+    <div class="modal-header"><div class="modal-title">Mahsulot qo'shish</div>
+      <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nomi *</label><input class="form-control" id="mn" placeholder="Guruch"></div>
+        <div class="form-group"><label class="form-label">Kategoriya</label><select class="form-control" id="mc"><option value="">Tanlang</option>${catOpts}</select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Filial *</label><select class="form-control" id="mb"><option value="">Tanlang</option>${brOpts}</select></div>
+        <div class="form-group"><label class="form-label">Birlik</label><input class="form-control" id="mu" placeholder="kg, dona, litr..."></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Ombordagi miqdor</label><input class="form-control" id="ms" type="number" value="0"></div>
+        <div class="form-group"><label class="form-label">Kunlik sarflanish</label><input class="form-control" id="md" type="number" step="0.1" value="1"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Izoh</label><input class="form-control" id="mnote" placeholder="Qo'shimcha ma'lumot"></div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
+        <button class="btn btn-primary" onclick="saveProduct(null)"><i class="ti ti-check"></i>Saqlash</button>
+      </div>
+    </div>`);
+}
+
+function openEditProduct(id) {
+  const p = products.find(x => x.id == id); if (!p) return;
+  const brOpts  = branches.map(b => `<option value="${b.id}" ${b.id==p.branch_id?'selected':''}>${esc(b.name)}</option>`).join('');
+  const catOpts = ['Oziq-ovqat', "Yoqilg'i", "Uy-ro'zg'or", 'Elektr', 'Ofis', 'Boshqa'].map(c => `<option ${c===p.category?'selected':''}>${esc(c)}</option>`).join('');
+  openModal(`
+    <div class="modal-header"><div class="modal-title">Mahsulotni tahrirlash</div>
+      <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nomi *</label><input class="form-control" id="mn" value="${esc(p.name)}"></div>
+        <div class="form-group"><label class="form-label">Kategoriya</label><select class="form-control" id="mc"><option value="">Tanlang</option>${catOpts}</select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Filial</label><select class="form-control" id="mb"><option value="">Tanlang</option>${brOpts}</select></div>
+        <div class="form-group"><label class="form-label">Birlik</label><input class="form-control" id="mu" value="${esc(p.unit||'')}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Ombordagi miqdor</label><input class="form-control" id="ms" type="number" value="${p.current_stock}"></div>
+        <div class="form-group"><label class="form-label">Kunlik sarflanish</label><input class="form-control" id="md" type="number" step="0.1" value="${p.daily_usage}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Izoh</label><input class="form-control" id="mnote" value="${esc(p.note||'')}"></div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
+        <button class="btn btn-primary" onclick="saveProduct(${id})"><i class="ti ti-check"></i>Saqlash</button>
+      </div>
+    </div>`);
+}
+
+async function saveProduct(id) {
+  const name = document.getElementById('mn').value.trim();
+  if (!name) { toast('Nomi kerak', 'error'); return; }
+  const body = {
+    name, category: document.getElementById('mc').value,
+    branch_id: document.getElementById('mb').value || null,
+    unit: document.getElementById('mu').value,
+    current_stock: parseFloat(document.getElementById('ms').value)||0,
+    daily_usage:   parseFloat(document.getElementById('md').value)||1,
+    note: document.getElementById('mnote').value
+  };
+  try {
+    if (id) await api('PUT', `/api/products/${id}`, body);
+    else    await api('POST', '/api/products', body);
+    toast(id ? 'Yangilandi' : "Qo'shildi");
+    closeModal(true);
+    await loadAll();
+    renderSection(currentSection);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function delProduct(id) {
+  if (!confirm("Mahsulotni o'chirishni tasdiqlaysizmi?")) return;
+  try {
+    await api('DELETE', `/api/products/${id}`);
+    toast("O'chirildi");
+    await loadAll();
+    renderSection(currentSection);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ─── CRUD: Purchases ──────────────────────────────────────────────────────────
+function openAddPurchase(preId) {
+  const prOpts = products.map(p => `<option value="${p.id}" ${p.id==preId?'selected':''}>${esc(p.name)} (${esc(brName(p.branch_id))})</option>`).join('');
+  openModal(`
+    <div class="modal-header"><div class="modal-title">Sotib olish qo'shish</div>
+      <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Mahsulot *</label><select class="form-control" id="xp"><option value="">Tanlang</option>${prOpts}</select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Miqdor *</label><input class="form-control" id="xq" type="number" step="0.01" placeholder="10"></div>
+        <div class="form-group"><label class="form-label">Birlik narxi (so'm)</label><input class="form-control" id="xpr" type="number" placeholder="15000"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Sana</label><input class="form-control" id="xd" type="date" value="${today()}"></div>
+        <div class="form-group"><label class="form-label">Yetkazib beruvchi</label><input class="form-control" id="xs" placeholder="Kompaniya nomi"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Izoh</label><input class="form-control" id="xn" placeholder="Qo'shimcha ma'lumot"></div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 13px;font-size:12px;color:#166534;margin-bottom:4px">
+        <i class="ti ti-info-circle"></i> Sotib olish qo'shilganda omborga avtomatik qo'shiladi.
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
+        <button class="btn btn-primary" onclick="savePurchase(null)"><i class="ti ti-check"></i>Saqlash</button>
+      </div>
+    </div>`);
+}
+
+function openEditPurchase(id) {
+  const p = purchases.find(x => x.id == id); if (!p) return;
+  const prOpts = products.map(pr => `<option value="${pr.id}" ${pr.id==p.product_id?'selected':''}>${esc(pr.name)} (${esc(brName(pr.branch_id))})</option>`).join('');
+  openModal(`
+    <div class="modal-header"><div class="modal-title">Sotib olishni tahrirlash</div>
+      <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Mahsulot *</label><select class="form-control" id="xp"><option value="">Tanlang</option>${prOpts}</select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Miqdor *</label><input class="form-control" id="xq" type="number" step="0.01" value="${p.quantity}"></div>
+        <div class="form-group"><label class="form-label">Birlik narxi (so'm)</label><input class="form-control" id="xpr" type="number" value="${p.unit_price}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Sana</label><input class="form-control" id="xd" type="date" value="${p.purchase_date}"></div>
+        <div class="form-group"><label class="form-label">Yetkazib beruvchi</label><input class="form-control" id="xs" value="${esc(p.supplier||'')}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Izoh</label><input class="form-control" id="xn" value="${esc(p.note||'')}"></div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
+        <button class="btn btn-primary" onclick="savePurchase(${id})"><i class="ti ti-check"></i>Saqlash</button>
+      </div>
+    </div>`);
+}
+
+async function savePurchase(id) {
+  const product_id = document.getElementById('xp').value;
+  const quantity   = parseFloat(document.getElementById('xq').value);
+  if (!product_id) { toast('Mahsulotni tanlang', 'error'); return; }
+  if (!quantity || quantity <= 0) { toast('Miqdorni kiriting', 'error'); return; }
+  const body = {
+    product_id, quantity,
+    unit_price:    parseFloat(document.getElementById('xpr').value)||0,
+    purchase_date: document.getElementById('xd').value || today(),
+    supplier:      document.getElementById('xs').value,
+    note:          document.getElementById('xn').value
+  };
+  try {
+    if (id) await api('PUT', `/api/purchases/${id}`, body);
+    else    await api('POST', '/api/purchases', body);
+    toast(id ? 'Yangilandi' : "Qo'shildi");
+    closeModal(true);
+    await loadAll();
+    renderSection(currentSection);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function delPurchase(id) {
+  if (!confirm("Sotib olishni o'chirishni tasdiqlaysizmi?")) return;
+  try {
+    await api('DELETE', `/api/purchases/${id}`);
+    toast("O'chirildi");
+    await loadAll();
+    renderSection(currentSection);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ─── CRUD: Branches ───────────────────────────────────────────────────────────
+function openAddBranch() {
+  openModal(`
+    <div class="modal-header"><div class="modal-title">Filial qo'shish</div>
+      <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nomi *</label><input class="form-control" id="bn" placeholder="Filial №5"></div>
+        <div class="form-group"><label class="form-label">Manzil</label><input class="form-control" id="ba" placeholder="Toshkent, ko'cha..."></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Mas'ul shaxs</label><input class="form-control" id="bm" placeholder="Ism Familiya"></div>
+        <div class="form-group"><label class="form-label">Telefon</label><input class="form-control" id="bp" placeholder="+998 90 123 45 67"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
+        <button class="btn btn-primary" onclick="saveBranch(null)"><i class="ti ti-check"></i>Saqlash</button>
+      </div>
+    </div>`);
+}
+
+function openEditBranch(id) {
+  const b = branches.find(x => x.id == id); if (!b) return;
+  openModal(`
+    <div class="modal-header"><div class="modal-title">Filialni tahrirlash</div>
+      <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nomi *</label><input class="form-control" id="bn" value="${esc(b.name)}"></div>
+        <div class="form-group"><label class="form-label">Manzil</label><input class="form-control" id="ba" value="${esc(b.address||'')}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Mas'ul shaxs</label><input class="form-control" id="bm" value="${esc(b.manager||'')}"></div>
+        <div class="form-group"><label class="form-label">Telefon</label><input class="form-control" id="bp" value="${esc(b.phone||'')}"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
+        <button class="btn btn-primary" onclick="saveBranch(${id})"><i class="ti ti-check"></i>Saqlash</button>
+      </div>
+    </div>`);
+}
+
+async function saveBranch(id) {
+  const name = document.getElementById('bn').value.trim();
+  if (!name) { toast('Nomi kerak', 'error'); return; }
+  const body = {
+    name, address: document.getElementById('ba').value,
+    manager: document.getElementById('bm').value,
+    phone:   document.getElementById('bp').value
+  };
+  try {
+    if (id) await api('PUT', `/api/branches/${id}`, body);
+    else    await api('POST', '/api/branches', body);
+    toast(id ? 'Yangilandi' : "Qo'shildi");
+    closeModal(true);
+    await loadAll();
+    renderSection(currentSection);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function delBranch(id) {
+  if (!confirm("Filialni o'chirishni tasdiqlaysizmi?")) return;
+  try {
+    await api('DELETE', `/api/branches/${id}`);
+    toast("O'chirildi");
+    await loadAll();
+    renderSection(currentSection);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    currentUser = await api('GET', '/api/me');
+    const av = document.getElementById('user-avatar');
+    const un = document.getElementById('sidebar-username');
+    if (av) av.textContent = (currentUser.username||'A')[0].toUpperCase();
+    if (un) un.textContent = currentUser.username;
+  } catch (e) {
+    window.location.href = '/';
     return;
   }
 
-  const rows = branchProds.map(p => {
-    const days = getDaysRemaining(p);
-    return `
-      <tr>
-        <td><strong>${escHtml(p.name)}</strong></td>
-        <td>${p.category ? '<span class="badge badge-gray">' + escHtml(p.category) + '</span>' : '—'}</td>
-        <td>${p.current_stock} ${escHtml(p.unit || '')}</td>
-        <td>${p.daily_usage}</td>
-        <td>${days === 9999 ? '∞' : days} kun</td>
-        <td>${getStatusBadge(days)}</td>
-      </tr>
-    `;
-  }).join('');
+  await loadAll();
 
-  openModal(`
-    <div class="modal-header">
-      <div class="modal-title"><i class="ti ti-building-store"></i> ${escHtml(branch.name)} – Mahsulotlar</div>
-      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="modal-body">
-      <div class="table-wrap">
-        <table>
-          <thead><tr>
-            <th>Mahsulot</th><th>Kategoriya</th><th>Omborda</th><th>Kunlik sarflanish</th><th>Qolgan kun</th><th>Holat</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>
-  `);
-}
+  document.querySelectorAll('.nav-item[data-section]').forEach(el =>
+    el.addEventListener('click', e => { e.preventDefault(); navigate(el.dataset.section); })
+  );
 
-function openBranchModal(id) {
-  const branch = id ? branches.find(b => b.id === id) : null;
-  const title = branch ? 'Filialni tahrirlash' : 'Filial qoshish';
-
-  openModal(`
-    <div class="modal-header">
-      <div class="modal-title">${title}</div>
-      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="modal-body">
-      <form id="branch-form" onsubmit="saveBranch(event, ${id || 'null'})">
-        <div class="form-group">
-          <label class="form-label">Filial nomi *</label>
-          <input class="form-control" name="name" required value="${branch ? escHtml(branch.name) : ''}" placeholder="Filial nomi" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Manzil</label>
-          <input class="form-control" name="address" value="${branch ? escHtml(branch.address || '') : ''}" placeholder="Shahar, kochasi, uy raqami" />
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Menejer</label>
-            <input class="form-control" name="manager" value="${branch ? escHtml(branch.manager || '') : ''}" placeholder="F.I.O." />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Telefon</label>
-            <input class="form-control" name="phone" value="${branch ? escHtml(branch.phone || '') : ''}" placeholder="+998 __ ___ ____" />
-          </div>
-        </div>
-        <div class="form-actions">
-          <button type="button" class="btn btn-secondary" onclick="closeModal()">Bekor qilish</button>
-          <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i> Saqlash</button>
-        </div>
-      </form>
-    </div>
-  `);
-}
-
-async function saveBranch(e, id) {
-  e.preventDefault();
-  const form = e.target;
-  const data = {
-    name: form.name.value,
-    address: form.address.value,
-    manager: form.manager.value,
-    phone: form.phone.value
-  };
-  try {
-    if (id) {
-      const updated = await api('PUT', '/api/branches/' + id, data);
-      const idx = branches.findIndex(b => b.id === id);
-      if (idx !== -1) branches[idx] = updated;
-    } else {
-      const created = await api('POST', '/api/branches', data);
-      branches.push(created);
-    }
-    closeModal();
-    showToast(id ? 'Filial yangilandi' : 'Filial qoshildi', 'success');
-    renderBranches();
-  } catch (err) {
-    showToast('Xato: ' + err.message, 'error');
-  }
-}
-
-async function deleteBranch(id) {
-  if (!confirm("Bu filialni ochirishni tasdiqlaysizmi?")) return;
-  try {
-    await api('DELETE', '/api/branches/' + id);
-    branches = branches.filter(b => b.id !== id);
-    showToast("Filial ochirildi", 'success');
-    renderBranches();
-  } catch (err) {
-    showToast('Xato: ' + err.message, 'error');
-  }
-}
-
-// ─── Report ───────────────────────────────────────────────────────────────────
-async function renderReport() {
-  const content = document.getElementById('content');
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
-
-  const yearOptions = [];
-  for (let y = currentYear; y >= currentYear - 3; y--) {
-    yearOptions.push('<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + y + '</option>');
-  }
-
-  const monthNames = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
-  const monthOptions = monthNames.map((m, i) =>
-    '<option value="' + (i + 1) + '"' + (i + 1 === currentMonth ? ' selected' : '') + '>' + m + '</option>'
-  ).join('');
-
-  content.innerHTML = `
-    <div class="section-header">
-      <div class="section-title">Hisobot</div>
-    </div>
-    <div class="filter-bar" style="margin-bottom:20px">
-      <select class="form-select" id="report-year" onchange="loadReport()">${yearOptions.join('')}</select>
-      <select class="form-select" id="report-month" onchange="loadReport()">${monthOptions}</select>
-    </div>
-    <div id="report-content">
-      <div class="loading-state"><i class="ti ti-loader-2 spin"></i><span>Yuklanmoqda...</span></div>
-    </div>
-  `;
-  loadReport();
-}
-
-async function loadReport() {
-  const year = document.getElementById('report-year')?.value;
-  const month = document.getElementById('report-month')?.value;
-  const reportContent = document.getElementById('report-content');
-  if (!reportContent) return;
-
-  try {
-    const data = await api('GET', '/api/report?year=' + year + '&month=' + month);
-    const totalPurchases = data.reduce((s, r) => s + r.purchase_count, 0);
-    const totalAmount = data.reduce((s, r) => s + r.total_amount, 0);
-    const monthNames = ['','Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
-
-    const rows = data.map(r => {
-      const pct = totalAmount > 0 ? Math.round(r.total_amount / totalAmount * 100) : 0;
-      return `
-        <tr>
-          <td><strong>${escHtml(r.branch_name)}</strong></td>
-          <td><span class="badge badge-blue">${r.purchase_count}</span></td>
-          <td><strong>${formatCurrency(r.total_amount)}</strong></td>
-          <td>${r.top_product ? escHtml(r.top_product) : '<span style="color:var(--text-muted)">—</span>'}</td>
-          <td>
-            <div style="display:flex;align-items:center;gap:8px">
-              <div style="flex:1;background:#f1f5f9;border-radius:4px;height:6px;overflow:hidden">
-                <div style="width:${pct}%;height:100%;background:var(--teal);border-radius:4px"></div>
-              </div>
-              <span style="font-size:12px;color:var(--text-muted);white-space:nowrap">${pct}%</span>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
-
-    reportContent.innerHTML = `
-      <div class="report-summary">
-        <div class="stat-card">
-          <div class="stat-icon teal"><i class="ti ti-building-store"></i></div>
-          <div>
-            <div class="stat-label">Filiallar soni</div>
-            <div class="stat-value">${data.length}</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon blue"><i class="ti ti-shopping-cart"></i></div>
-          <div>
-            <div class="stat-label">Jami xaridlar</div>
-            <div class="stat-value">${totalPurchases}</div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon amber"><i class="ti ti-currency-dollar"></i></div>
-          <div>
-            <div class="stat-label">Jami xarajat</div>
-            <div class="stat-value" style="font-size:16px">${formatCurrency(totalAmount)}</div>
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">${monthNames[parseInt(month)]} ${year} – Filiallar kesimida hisobot</div>
-        </div>
-        <div class="card-body">
-          <div class="table-wrap">
-            <table>
-              <thead><tr>
-                <th>Filial</th>
-                <th>Xarid soni</th>
-                <th>Jami summa</th>
-                <th>Eng kop xaridlar mahsuloti</th>
-                <th>Ulush (%)</th>
-              </tr></thead>
-              <tbody>
-                ${rows}
-                <tr style="background:#f8fafc;font-weight:700">
-                  <td>Jami</td>
-                  <td>${totalPurchases}</td>
-                  <td>${formatCurrency(totalAmount)}</td>
-                  <td colspan="2">—</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    `;
-  } catch (err) {
-    reportContent.innerHTML = '<div class="empty-state"><i class="ti ti-alert-circle"></i>Hisobot yuklanmadi</div>';
-  }
-}
-
-// ─── Modal helpers ─────────────────────────────────────────────────────────────
-function openModal(html) {
-  const overlay = document.getElementById('modal-overlay');
-  const box = document.getElementById('modal-box');
-  box.innerHTML = html;
-  overlay.classList.add('open');
-  setTimeout(() => {
-    const first = box.querySelector('input, select, textarea');
-    if (first) first.focus();
-  }, 50);
-}
-
-function closeModal(event) {
-  if (event && event.target !== document.getElementById('modal-overlay')) return;
-  const overlay = document.getElementById('modal-overlay');
-  overlay.classList.remove('open');
-  document.getElementById('modal-box').innerHTML = '';
-}
-
-// ─── Toast ────────────────────────────────────────────────────────────────────
-function showToast(message, type) {
-  type = type || 'success';
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-  const icons = { success: 'ti-circle-check', error: 'ti-circle-x', info: 'ti-info-circle' };
-  const toast = document.createElement('div');
-  toast.className = 'toast ' + type;
-  toast.innerHTML = '<i class="ti ' + (icons[type] || icons.info) + '"></i>' + escHtml(message);
-  container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(20px)';
-    toast.style.transition = 'all 0.3s';
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function formatCurrency(amount) {
-  if (!amount && amount !== 0) return '—';
-  const num = Math.round(amount);
-  return num.toLocaleString('ru-RU').replace(/\s/g, ' ') + " so'm";
-}
-
-function formatDate(dateStr) {
-  if (!dateStr) return '—';
-  try {
-    const parts = dateStr.split('-');
-    return parts[2] + '.' + parts[1] + '.' + parts[0];
-  } catch(e) {
-    return dateStr;
-  }
-}
-
-function getDaysRemaining(product) {
-  if (!product.daily_usage || product.daily_usage <= 0) return 9999;
-  return Math.round((product.current_stock / product.daily_usage) * 10) / 10;
-}
-
-function getStatusBadge(days) {
-  if (days === 9999) return '<span class="badge badge-gray">Cheksiz</span>';
-  if (days <= 0)  return '<span class="badge badge-red"><i class="ti ti-alert-circle"></i> Tugagan</span>';
-  if (days <= 2)  return '<span class="badge badge-red"><i class="ti ti-alert-triangle"></i> Kritik</span>';
-  if (days <= 7)  return '<span class="badge badge-amber"><i class="ti ti-clock"></i> Kam qoldi</span>';
-  if (days <= 14) return '<span class="badge badge-blue"><i class="ti ti-info-circle"></i> Diqqat</span>';
-  return '<span class="badge badge-teal"><i class="ti ti-circle-check"></i> Yetarli</span>';
-}
-
-function escHtml(str) {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-// ─── API wrapper ──────────────────────────────────────────────────────────────
-async function api(method, url, body) {
-  const opts = {
-    method: method,
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin'
-  };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
-  if (res.status === 401) {
+  document.getElementById('logout-btn')?.addEventListener('click', async () => {
+    await api('POST', '/api/auth/logout');
     window.location.href = '/';
-    throw new Error('Unauthorized');
-  }
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Server xatosi');
-  }
-  return data;
+  });
+
+  document.getElementById('sidebar-toggle')?.addEventListener('click', () =>
+    document.getElementById('sidebar').classList.toggle('open')
+  );
+
+  document.getElementById('alert-btn')?.addEventListener('click', () => navigate('overview'));
+
+  navigate('overview');
+
+  setInterval(async () => { await loadAll(); updateAlertBadge(); }, 5 * 60 * 1000);
 }
+
+document.addEventListener('DOMContentLoaded', init);
