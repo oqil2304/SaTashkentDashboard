@@ -25,14 +25,13 @@ app.get('/', (req, res) => {
   if (token) { try { jwt.verify(token, JWT_SECRET); return res.redirect('/dashboard'); } catch {} }
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
-
 app.get('/dashboard', auth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Login va parol kerak' });
   try {
-    const user = await db.get2('SELECT * FROM users WHERE username = ?', [username]);
+    const user = await db.get2('SELECT * FROM users WHERE username=?', [username]);
     if (!user || !bcrypt.compareSync(password, user.password_hash))
       return res.status(401).json({ error: "Login yoki parol noto'g'ri" });
     const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
@@ -40,7 +39,6 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({ success: true, user: { id: user.id, username: user.username, role: user.role } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
 app.post('/api/auth/logout', (req, res) => { res.clearCookie('token'); res.json({ success: true }); });
 app.get('/api/me', auth, (req, res) => res.json({ id: req.user.id, username: req.user.username, role: req.user.role }));
 
