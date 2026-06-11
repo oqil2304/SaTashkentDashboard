@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SaTashkent – Boshqaruv Paneli</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-circle">ST</div>
+        <div>
+          <div class="sidebar-brand">SaTashkent</div>
+          <div class="sidebar-brand-sub">Ta'minot Bo'limi</div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a class="nav-item active" data-section="overview" href="#">
+        <i class="ti ti-layout-dashboard nav-icon"></i>
+        <span>Umumiy ko'rinish</span>
+      </a>
+      <a class="nav-item" data-section="products" href="#">
+        <i class="ti ti-box nav-icon"></i>
+        <span>Mahsulotlar</span>
+      </a>
+      <a class="nav-item" data-section="purchases" href="#">
+        <i class="ti ti-shopping-cart nav-icon"></i>
+        <span>Sotib olishlar</span>
+      </a>
+      <a class="nav-item" data-section="branches" href="#">
+        <i class="ti ti-building-store nav-icon"></i>
+        <span>Filiallar</span>
+      </a>
+      <a class="nav-item" data-section="report" href="#">
+        <i class="ti ti-chart-bar nav-icon"></i>
+        <span>Hisobot</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar" id="user-avatar">A</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-username" id="sidebar-username">Admin</div>
+          <div class="sidebar-role">Administrator</div>
+        </div>
+      </div>
+      <button class="btn-logout" id="logout-btn" title="Chiqish">
+        <i class="ti ti-logout"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main-wrap">
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle">
+        <i class="ti ti-menu-2"></i>
+      </button>
+      <h1 class="page-title" id="page-title">Umumiy ko'rinish</h1>
+      <div class="topbar-actions">
+        <button class="alert-btn" id="alert-btn" title="Ogohlantirishlar">
+          <i class="ti ti-bell"></i>
+          <span class="alert-badge" id="alert-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="content" id="content">
+      <div class="loading-state">
+        <i class="ti ti-loader-2 spin"></i>
+        <span>Yuklanmoqda...</span>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+    <div class="modal-box" id="modal-box"></div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SaTashkent - Kirish</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0f172a;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-image: radial-gradient(ellipse at 20% 50%, rgba(29,158,117,0.15) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 20%, rgba(59,130,246,0.1) 0%, transparent 50%);
+    }
+    .login-card {
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+    }
+    .logo-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 32px;
+    }
+    .logo-circle {
+      width: 72px;
+      height: 72px;
+      background: linear-gradient(135deg, #1D9E75, #157a5a);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(29,158,117,0.35);
+      letter-spacing: -0.5px;
+    }
+    .logo-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #1e293b;
+      text-align: center;
+    }
+    .logo-subtitle {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 4px;
+      text-align: center;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+    .input-wrap {
+      position: relative;
+    }
+    .input-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 18px;
+      pointer-events: none;
+    }
+    .form-input {
+      width: 100%;
+      padding: 12px 14px 12px 44px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      color: #1e293b;
+      background: #f8fafc;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+    .form-input:focus {
+      border-color: #1D9E75;
+      box-shadow: 0 0 0 3px rgba(29,158,117,0.12);
+      background: #fff;
+    }
+    .btn-login {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, #1D9E75, #157a5a);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      margin-top: 8px;
+    }
+    .btn-login:hover { opacity: 0.92; }
+    .btn-login:active { transform: scale(0.99); }
+    .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+    .error-msg {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    .error-msg.show { display: flex; }
+    .hint {
+      text-align: center;
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="logo-wrap">
+      <div class="logo-circle">ST</div>
+      <div class="logo-title">SaTashkent Ta'minot</div>
+      <div class="logo-subtitle">Bosh Boshqaruv Paneli</div>
+    </div>
+
+    <div class="error-msg" id="error-msg">
+      <i class="ti ti-alert-circle"></i>
+      <span id="error-text">Xato foydalanuvchi nomi yoki parol</span>
+    </div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label class="form-label" for="username">Foydalanuvchi nomi</label>
+        <div class="input-wrap">
+          <i class="ti ti-user input-icon"></i>
+          <input class="form-input" type="text" id="username" name="username" placeholder="admin" autocomplete="username" required />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="password">Parol</label>
+        <div class="input-wrap">
+          <i class="ti ti-lock input-icon"></i>
+          <input class="form-input" type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required />
+        </div>
+      </div>
+      <button class="btn-login" type="submit" id="login-btn">
+        Kirish
+      </button>
+    </form>
+
+    <div class="hint">admin / admin123</div>
+  </div>
+
+  <script>
+    const form = document.getElementById('login-form');
+    const errorDiv = document.getElementById('error-msg');
+    const errorText = document.getElementById('error-text');
+    const loginBtn = document.getElementById('login-btn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorDiv.classList.remove('show');
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Yuklanmoqda...';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          window.location.href = '/';
+        } else {
+          errorText.textContent = data.error || 'Kirish xatosi';
+          errorDiv.classList.add('show');
+        }
+      } catch (err) {
+        errorText.textContent = 'Server bilan aloqa xatosi';
+        errorDiv.classList.add('show');
+      } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Kirish';
+      }
+    });
+  </script>
+</body>
+</html>
