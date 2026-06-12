@@ -33,6 +33,12 @@ app.get('/', (req, res) => {
   if (token) { try { jwt.verify(token, JWT_SECRET); return res.redirect('/dashboard'); } catch {} }
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
+// Toza login sahifasi — brauzer keshidan qatʼiy nazar har doim login formani koʻrsatadi
+app.get('/login', (req, res) => {
+  noCache(res);
+  res.clearCookie('token');
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
 // Sessiya yaroqsiz boʻlsa — 401 JSON emas, login sahifasiga yoʻnaltirish (sikl boʻlmaydi)
 app.get('/dashboard', (req, res) => {
   noCache(res);
