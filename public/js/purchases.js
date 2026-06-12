@@ -7,7 +7,7 @@ function renderPurchases(c) {
   c.innerHTML = `
     <div class="section-header">
       <div class="section-title">Sotib olishlar tarixi</div>
-      <button class="btn btn-primary" onclick="openAddPurchase(null)"><i class="ti ti-plus"></i>Qoʻshish</button>
+      <button class="btn btn-primary" onclick="openAddPurchase(null)"><i class="ti ti-shopping-cart"></i>Sotib olish</button>
     </div>
     <div class="filter-bar">
       <select class="form-select" id="xf-br" onchange="applyPurchaseFilter()">
@@ -70,83 +70,103 @@ function applyPurchaseFilter() {
   if (tot) tot.innerHTML = `Jami: <strong style="color:var(--teal);font-size:15px">${fmtMoney(total)}</strong> (${list.length} ta yozuv)`;
 }
 
-function openAddPurchase(preId) {
-  const prOpts = products.map(p =>
-    `<option value="${p.id}" ${p.id == preId ? 'selected' : ''}>${esc(p.name)} (${esc(brName(p.branch_id))})</option>`
+// Filial tanlanganida datalist ni yangilash
+function _purchBranchChange() {
+  const brId = document.getElementById('xbr').value;
+  const dl = document.getElementById('xp-list');
+  if (!dl) return;
+  const prods = brId ? products.filter(p => p.branch_id == brId) : products;
+  dl.innerHTML = prods.map(p => `<option value="${esc(p.name)}"></option>`).join('');
+}
+
+function _purchModal(title, saveFn, opts = {}) {
+  const firstBr = branches[0];
+  const brOpts  = branches.map(b =>
+    `<option value="${b.id}" ${b.id == opts.branch_id ? 'selected' : (opts.branch_id == null && b.id == firstBr?.id ? 'selected' : '')}>${esc(b.name)}</option>`
   ).join('');
+
   openModal(`
     <div class="modal-header">
-      <div class="modal-title">Sotib olish qoʻshish</div>
+      <div class="modal-title">${title}</div>
       <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
-      <div class="form-group"><label class="form-label">Mahsulot *</label>
-        <select class="form-control" id="xp"><option value="">Tanlang</option>${prOpts}</select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Filial *</label>
+          <select class="form-control" id="xbr" onchange="_purchBranchChange()">
+            ${brOpts}
+          </select></div>
+        <div class="form-group"><label class="form-label">Mahsulot *</label>
+          <input class="form-control" id="xp" list="xp-list" placeholder="Mahsulot nomi" value="${esc(opts.product_name || '')}" autocomplete="off">
+          <datalist id="xp-list"></datalist>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Miqdor *</label>
-          <input class="form-control" id="xq" type="number" step="0.01" placeholder="10"></div>
+          <input class="form-control" id="xq" type="number" step="0.01" placeholder="10" value="${opts.quantity || ''}"></div>
         <div class="form-group"><label class="form-label">Birlik narxi (soʻm)</label>
-          <input class="form-control" id="xpr" type="number" placeholder="15000"></div>
+          <input class="form-control" id="xpr" type="number" placeholder="15000" value="${opts.unit_price || ''}"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Sana</label>
-          <input class="form-control" id="xd" type="date" value="${today()}"></div>
+          <input class="form-control" id="xd" type="date" value="${opts.purchase_date || today()}"></div>
         <div class="form-group"><label class="form-label">Yetkazib beruvchi</label>
-          <input class="form-control" id="xs" placeholder="Kompaniya nomi"></div>
+          <input class="form-control" id="xs" placeholder="Kompaniya nomi" value="${esc(opts.supplier || '')}"></div>
       </div>
       <div class="form-group"><label class="form-label">Izoh</label>
-        <input class="form-control" id="xn" placeholder="Qoʻshimcha maʼlumot"></div>
+        <input class="form-control" id="xn" placeholder="Qoʻshimcha maʼlumot" value="${esc(opts.note || '')}"></div>
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 13px;font-size:12px;color:#166534;margin-bottom:4px">
         <i class="ti ti-info-circle"></i> Sotib olish qoʻshilganda omborga avtomatik qoʻshiladi.
       </div>
       <div class="form-actions">
         <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
-        <button class="btn btn-primary" onclick="savePurchase(null)"><i class="ti ti-check"></i>Saqlash</button>
+        <button class="btn btn-primary" onclick="${saveFn}"><i class="ti ti-check"></i>Saqlash</button>
       </div>
     </div>`);
+
+  // Datalistni darhol to'ldirish
+  _purchBranchChange();
+}
+
+function openAddPurchase(preId) {
+  const preProd   = preId ? products.find(p => p.id == preId) : null;
+  const branchId  = preProd ? preProd.branch_id : (branches[0]?.id ?? null);
+  _purchModal('Sotib olish qoʻshish', 'savePurchase(null)', {
+    branch_id:    branchId,
+    product_name: preProd?.name || ''
+  });
 }
 
 function openEditPurchase(id) {
   const p = purchases.find(x => x.id == id); if (!p) return;
-  const prOpts = products.map(pr =>
-    `<option value="${pr.id}" ${pr.id == p.product_id ? 'selected' : ''}>${esc(pr.name)} (${esc(brName(pr.branch_id))})</option>`
-  ).join('');
-  openModal(`
-    <div class="modal-header">
-      <div class="modal-title">Sotib olishni tahrirlash</div>
-      <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group"><label class="form-label">Mahsulot *</label>
-        <select class="form-control" id="xp"><option value="">Tanlang</option>${prOpts}</select></div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Miqdor *</label>
-          <input class="form-control" id="xq" type="number" step="0.01" value="${p.quantity}"></div>
-        <div class="form-group"><label class="form-label">Birlik narxi (soʻm)</label>
-          <input class="form-control" id="xpr" type="number" value="${p.unit_price}"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Sana</label>
-          <input class="form-control" id="xd" type="date" value="${p.purchase_date}"></div>
-        <div class="form-group"><label class="form-label">Yetkazib beruvchi</label>
-          <input class="form-control" id="xs" value="${esc(p.supplier || '')}"></div>
-      </div>
-      <div class="form-group"><label class="form-label">Izoh</label>
-        <input class="form-control" id="xn" value="${esc(p.note || '')}"></div>
-      <div class="form-actions">
-        <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
-        <button class="btn btn-primary" onclick="savePurchase(${id})"><i class="ti ti-check"></i>Saqlash</button>
-      </div>
-    </div>`);
+  _purchModal('Sotib olishni tahrirlash', `savePurchase(${id})`, {
+    branch_id:    p.branch_id,
+    product_name: p.product_name || '',
+    quantity:     p.quantity,
+    unit_price:   p.unit_price,
+    purchase_date: p.purchase_date,
+    supplier:     p.supplier || '',
+    note:         p.note || ''
+  });
 }
 
 async function savePurchase(id) {
-  const product_id = document.getElementById('xp').value;
-  const quantity   = parseFloat(document.getElementById('xq').value);
-  if (!product_id) { toast('Mahsulotni tanlang', 'error'); return; }
+  const brId    = document.getElementById('xbr').value;
+  const pName   = document.getElementById('xp').value.trim();
+  const quantity = parseFloat(document.getElementById('xq').value);
+  if (!pName)             { toast('Mahsulot nomini kiriting', 'error'); return; }
   if (!quantity || quantity <= 0) { toast('Miqdorni kiriting', 'error'); return; }
+
+  // Mahsulotni nom va filial bo'yicha topamiz
+  const prod = products.find(p =>
+    p.name.toLowerCase() === pName.toLowerCase() && (!brId || p.branch_id == brId)
+  ) || products.find(p => p.name.toLowerCase() === pName.toLowerCase());
+
+  if (!prod) { toast(`"${pName}" mahsuloti topilmadi`, 'error'); return; }
+
   const body = {
-    product_id, quantity,
+    product_id:    prod.id,
+    quantity,
     unit_price:    parseFloat(document.getElementById('xpr').value) || 0,
     purchase_date: document.getElementById('xd').value || today(),
     supplier:      document.getElementById('xs').value,
