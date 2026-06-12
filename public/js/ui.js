@@ -4,6 +4,7 @@ console.log('[ui.js] yuklandi');
 function toast(msg, type = 'success') {
   const c = document.getElementById('toast-container');
   if (!c) return;
+  if (typeof i18nText === 'function') msg = i18nText(msg);
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   const icon = { success: 'ti-check', error: 'ti-alert-circle', info: 'ti-info-circle' }[type] || 'ti-info-circle';
@@ -17,6 +18,7 @@ function openModal(html, wide = false) {
   box.innerHTML = html;
   box.classList.toggle('wide', wide);
   document.getElementById('modal-overlay').classList.add('open');
+  if (typeof applyI18n === 'function') applyI18n(box);
 }
 
 function closeModal(e) {

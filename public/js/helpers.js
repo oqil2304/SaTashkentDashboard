@@ -9,7 +9,7 @@ function esc(s) {
 }
 
 function fmtMoney(n) {
-  return Number(n || 0).toLocaleString('uz-UZ') + " so'm";
+  return Number(n || 0).toLocaleString('uz-UZ') + ' ' + (typeof i18nUnit === 'function' ? i18nUnit('som') : "so'm");
 }
 
 function today() {
@@ -32,10 +32,12 @@ function daysColor(days) {
 }
 
 function statusBadge(days) {
+  const KUN  = (typeof i18nUnit === 'function') ? i18nUnit('day') : 'kun';
+  const DONE = (typeof i18nUnit === 'function') ? i18nUnit('out') : 'Tugagan';
   if (!isFinite(days)) return `<span class="badge badge-gray">—</span>`;
-  if (days <= 0)  return `<span class="badge badge-red"><i class="ti ti-alert-triangle"></i> Tugagan</span>`;
-  if (days <= 2)  return `<span class="badge badge-red"><i class="ti ti-alarm"></i> ${days.toFixed(1)} kun</span>`;
-  if (days <= 7)  return `<span class="badge badge-amber"><i class="ti ti-clock"></i> ${days.toFixed(1)} kun</span>`;
-  if (days <= 14) return `<span class="badge badge-blue">${Math.round(days)} kun</span>`;
-  return `<span class="badge badge-teal">${Math.round(days)} kun</span>`;
+  if (days <= 0)  return `<span class="badge badge-red"><i class="ti ti-alert-triangle"></i> ${DONE}</span>`;
+  if (days <= 2)  return `<span class="badge badge-red"><i class="ti ti-alarm"></i> ${days.toFixed(1)} ${KUN}</span>`;
+  if (days <= 7)  return `<span class="badge badge-amber"><i class="ti ti-clock"></i> ${days.toFixed(1)} ${KUN}</span>`;
+  if (days <= 14) return `<span class="badge badge-blue">${Math.round(days)} ${KUN}</span>`;
+  return `<span class="badge badge-teal">${Math.round(days)} ${KUN}</span>`;
 }

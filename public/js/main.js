@@ -54,6 +54,7 @@ function renderSection(s) {
     default: c.innerHTML = `<div class="empty-state"><i class="ti ti-question-mark"></i><p>Boʻlim topilmadi</p></div>`;
   }
   paintIcons(c);
+  if (typeof applyI18n === 'function') applyI18n(document.body);
 }
 
 const ROLE_LABELS = { admin: 'Administrator', branch: 'Filial omborchisi', viewer: 'Kuzatuvchi', user: 'Foydalanuvchi' };
@@ -142,8 +143,14 @@ async function init() {
     }, 60);
   });
 
+  // Til almashtirgich
+  if (typeof initLangSwitch === 'function') initLangSwitch();
+
   // Boshlangʻich sahifa
   navigate('overview');
+
+  // Tanlangan tilni qo'llash
+  if (typeof applyI18n === 'function') applyI18n(document.body);
 
   // ESC — modal yopish yoki orqaga qaytish
   document.addEventListener('keydown', e => {
