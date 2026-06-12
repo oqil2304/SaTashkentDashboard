@@ -366,7 +366,12 @@ thead th {
   text-transform: uppercase;
   letter-spacing: 0.4px;
   white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: color .12s, background .12s;
 }
+thead th:hover { color: var(--teal); background: #f1f5f9; }
+thead th .sort-ind { color: var(--teal); font-size: 11px; }
 
 tbody tr {
   border-bottom: 1px solid var(--border);
