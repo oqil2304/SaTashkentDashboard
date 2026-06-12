@@ -7,19 +7,19 @@ function renderReport(c) {
   const selYear  = now.getFullYear();
   const selMonth = now.getMonth() + 1;
 
-  const monthOpts = Array.from({ length: 12 }, (_, i) => {
-    const d = new Date(selYear, i);
-    return `<option value="${i+1}" ${i+1 === selMonth ? 'selected' : ''}>${d.toLocaleString('uz-UZ', { month: 'long' })}</option>`;
-  }).join('');
+  const UZ_MONTHS = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
+  const monthOpts = UZ_MONTHS.map((name, i) =>
+    `<option value="${i+1}" ${i+1 === selMonth ? 'selected' : ''}>${name}</option>`
+  ).join('');
   const yearOpts = [selYear - 1, selYear, selYear + 1]
     .map(y => `<option value="${y}" ${y === selYear ? 'selected' : ''}>${y}</option>`).join('');
 
   c.innerHTML = `
     <div class="section-header">
       <div class="section-title">Oylik hisobot</div>
-      <div style="display:flex;gap:8px">
-        <select class="form-select" id="rep-month" onchange="applyReport()">${monthOpts}</select>
-        <select class="form-select" id="rep-year"  onchange="applyReport()">${yearOpts}</select>
+      <div style="display:flex;gap:10px;align-items:center">
+        <select class="form-select" id="rep-month" onchange="applyReport()" style="min-width:130px;font-weight:600">${monthOpts}</select>
+        <select class="form-select" id="rep-year"  onchange="applyReport()" style="min-width:90px;font-weight:600">${yearOpts}</select>
       </div>
     </div>
     <div id="report-body"></div>`;
