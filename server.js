@@ -11,7 +11,12 @@ const PORT       = 8080;
 
 app.use(express.json());
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+// Statik fayllarni keshlamaslik — brauzer doim yangi app.js/style.css oladi
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+}));
 
 function auth(req, res, next) {
   const token = req.cookies.token;
