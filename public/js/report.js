@@ -45,6 +45,9 @@ function applyReport() {
     return { ...b, purchase_count: bPurch.length, total_amount: total, top_product: top };
   }).sort((a, b) => b.total_amount - a.total_amount);
 
+  // store for detail view
+  body.dataset.ym = ym;
+
   body.innerHTML = `
     <div class="stats-grid" style="margin-bottom:16px">
       <div class="stat-card">
@@ -65,14 +68,13 @@ function applyReport() {
     </div>
     <div class="card" style="margin-bottom:16px">
       <div class="table-wrap"><table>
-        <thead><tr><th>Filial</th><th>Sotib olishlar</th><th>Eng koʻp olingan</th><th>Jami xarajat</th><th>Ulush</th></tr></thead>
+        <thead><tr><th>Filial</th><th>Sotib olishlar</th><th>Jami xarajat</th><th>Ulush</th></tr></thead>
         <tbody>
           ${branchStats.map(b => {
             const pct = totalAll > 0 ? (b.total_amount / totalAll * 100).toFixed(1) : 0;
-            return `<tr>
+            return `<tr style="cursor:pointer" onclick="openReportBranchDetail(${b.id})">
               <td style="font-weight:600">${esc(b.name)}</td>
               <td>${b.purchase_count}</td>
-              <td style="color:#64748b">${esc(b.top_product)}</td>
               <td style="font-weight:700;color:var(--teal)">${fmtMoney(b.total_amount)}</td>
               <td><div style="display:flex;align-items:center;gap:8px">
                 <div style="flex:1;height:6px;background:#f1f5f9;border-radius:3px;min-width:60px">
@@ -105,4 +107,44 @@ function applyReport() {
         </tbody>
       </table></div>
     </div>`;
+}
+
+function openReportBranchDetail(branchId) {
+  const month = parseInt(document.getElementById('rep-month')?.value || new Date().getMonth() + 1);
+  const year  = parseInt(document.getElementById('rep-year')?.value  || new Date().getFullYear());
+  const ym    = `${year}-${String(month).padStart(2, '0')}`;
+
+  const branch = branches.find(b => b.id == branchId);
+  const bName  = branch ? branch.name : '—';
+  const UZ_MONTHS = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
+  const mLabel = `${UZ_MONTHS[month - 1]} ${year}`;
+
+  const list = purchases.filter(p => p.branch_id == branchId && (p.purchase_date || '').startsWith(ym));
+  const total = list.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
+
+  const rows = list.length
+    ? list.map(p => `<tr>
+        <td style="color:#64748b">${esc(p.purchase_date)}</td>
+        <td style="font-weight:600">${esc(p.product_name || '—')}</td>
+        <td>${p.quantity} ${esc(p.unit || '')}</td>
+        <td>${fmtMoney(p.unit_price)}</td>
+        <td style="font-weight:700;color:var(--teal)">${fmtMoney((p.quantity || 0) * (p.unit_price || 0))}</td>
+        <td style="color:#64748b">${esc(p.supplier || '—')}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="6"><div class="empty-state"><i class="ti ti-calendar-off"></i><p>Bu oyda sotib olish yo'q</p></div></td></tr>`;
+
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+      <button class="btn btn-secondary btn-icon" onclick="navigate('report')" title="Orqaga"><i class="ti ti-arrow-left"></i></button>
+      <div>
+        <div class="section-title" style="margin:0"><i class="ti ti-building-store" style="color:var(--teal);margin-right:6px"></i>${esc(bName)}</div>
+        <div style="font-size:13px;color:#94a3b8">${mLabel} — sotib olishlar · Jami: ${fmtMoney(total)}</div>
+      </div>
+    </div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>Sana</th><th>Mahsulot</th><th>Miqdor</th><th>Narx</th><th>Jami</th><th>Yetkazuvchi</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div></div>`;
+  paintIcons(c);
 }
