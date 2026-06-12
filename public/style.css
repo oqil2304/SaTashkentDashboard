@@ -126,7 +126,8 @@ html, body {
 
 .sidebar-avatar {
   width: 34px; height: 34px;
-  border-radius: 8px;
+  border-radius: 50%;
+  overflow: hidden;
   background: linear-gradient(135deg, var(--teal), var(--teal-dark));
   color: white;
   font-size: 14px;
