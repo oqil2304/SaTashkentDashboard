@@ -104,7 +104,10 @@ function openFinishedDetail() {
       <td style="font-weight:700;color:var(--red)">${p.current_stock} ${esc(p.unit)}</td>
       <td style="color:#64748b">${p.daily_usage} ${esc(p.unit)}/kun</td>
       <td>${statusBadge(d)}</td>
-      <td>${isAdmin() ? `<button class="btn btn-sm btn-primary" onclick="openAddPurchase(${p.id})"><i class="ti ti-shopping-cart"></i>Sotib olish</button>` : ''}</td>
+      <td style="display:flex;gap:6px;align-items:center">
+        ${isAdmin() ? `<button class="btn btn-sm btn-primary" onclick="openAddPurchase(${p.id})"><i class="ti ti-shopping-cart"></i>Sotib olish</button>` : ''}
+        ${isAdmin() ? `<button class="btn btn-sm btn-danger btn-icon" title="Mahsulotni o'chirish" onclick="delFinishedProduct(${p.id},this)"><i class="ti ti-x"></i></button>` : ''}
+      </td>
     </tr>`;
   }).join('') : `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>Tugagan mahsulot yoʻq</p></div></td></tr>`;
 
@@ -121,6 +124,20 @@ function openFinishedDetail() {
       <tbody>${rows}</tbody>
     </table></div></div>`;
   paintIcons(c);
+}
+
+async function delFinishedProduct(id, btn) {
+  if (!confirm("Bu mahsulotni ro'yxatdan o'chirishni tasdiqlaysizmi?")) return;
+  try {
+    btn.disabled = true;
+    await api('DELETE', `/api/products/${id}`);
+    toast("O'chirildi");
+    await loadAll();
+    openFinishedDetail(); // ro'yxatni yangilash
+  } catch (e) {
+    btn.disabled = false;
+    toast(e.message, 'error');
+  }
 }
 
 // Karta tanlanganda — pastdagi ro'yxatni almashtirish
