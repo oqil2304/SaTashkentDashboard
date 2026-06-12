@@ -25,12 +25,15 @@ function auth(req, res, next) {
   catch { res.status(401).json({ error: "Token noto'g'ri" }); }
 }
 
+function noCache(res) { res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate'); }
+
 app.get('/', (req, res) => {
+  noCache(res);
   const token = req.cookies.token;
   if (token) { try { jwt.verify(token, JWT_SECRET); return res.redirect('/dashboard'); } catch {} }
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
-app.get('/dashboard', auth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/dashboard', auth, (req, res) => { noCache(res); res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {};

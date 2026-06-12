@@ -10,10 +10,22 @@ let currentUser = null;
 async function api(method, url, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
-  if (res.status === 401) { window.location.href = '/'; throw new Error('Unauthorized'); }
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Server xatosi');
+  let res;
+  try {
+    res = await fetch(url, opts);
+  } catch (netErr) {
+    const e = new Error("Serverga ulanib bo'lmadi — server ishlab turibdimi?");
+    e.network = true;
+    throw e;
+  }
+  if (res.status === 401) {
+    const e = new Error('Sessiya tugagan, qayta kiring');
+    e.status = 401;
+    throw e;
+  }
+  let data = {};
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok) throw new Error(data.error || `Server xatosi (${res.status})`);
   return data;
 }
 
@@ -65,21 +77,29 @@ function closeModal(e) {
 
 // ─── Load data ────────────────────────────────────────────────────────────────
 async function loadAll() {
-  try {
-    const results = await Promise.all([
-      api('GET', '/api/branches'),
-      api('GET', '/api/products'),
-      api('GET', '/api/purchases'),
-      api('GET', '/api/categories'),
-    ]);
-    branches   = results[0];
-    products   = results[1];
-    purchases  = results[2];
-    categories = results[3];
-    updateAlertBadge();
-  } catch (e) {
-    console.error('loadAll error:', e);
-  }
+  const results = await Promise.all([
+    api('GET', '/api/branches'),
+    api('GET', '/api/products'),
+    api('GET', '/api/purchases'),
+    api('GET', '/api/categories'),
+  ]);
+  branches   = results[0];
+  products   = results[1];
+  purchases  = results[2];
+  categories = results[3];
+  updateAlertBadge();
+}
+
+function showError(msg) {
+  const c = document.getElementById('content');
+  if (!c) return;
+  c.innerHTML = `
+    <div style="text-align:center;padding:60px 20px">
+      <i class="ti ti-alert-triangle" style="font-size:48px;color:var(--red)"></i>
+      <div style="font-size:16px;font-weight:700;margin-top:12px;color:#0f172a">Xatolik yuz berdi</div>
+      <div style="font-size:13px;margin-top:6px;color:#64748b">${esc(msg)}</div>
+      <button class="btn btn-primary" style="margin-top:18px" onclick="location.reload()"><i class="ti ti-refresh"></i> Qayta urinish</button>
+    </div>`;
 }
 
 function alertProducts() {
@@ -693,6 +713,8 @@ async function delBranch(id) {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
+  // 1) Kim kirganini aniqlash. Faqat haqiqiy 401 da login sahifasiga qaytamiz
+  //    (aks holda /dashboard ⇄ / o'rtasida cheksiz qayta-yuklanish bo'ladi).
   try {
     currentUser = await api('GET', '/api/me');
     const av = document.getElementById('user-avatar');
@@ -700,19 +722,27 @@ async function init() {
     if (av) av.textContent = (currentUser.username||'A')[0].toUpperCase();
     if (un) un.textContent = currentUser.username;
   } catch (e) {
-    window.location.href = '/';
+    if (e.status === 401) { window.location.replace('/'); return; }
+    showError(e.message);
     return;
   }
 
-  await loadAll();
+  // 2) Ma'lumotlarni yuklash. Xato bo'lsa — ko'rinadigan xabar, qayta-yuklanish YO'Q.
+  try {
+    await loadAll();
+  } catch (e) {
+    if (e.status === 401) { window.location.replace('/'); return; }
+    showError(e.message);
+    return;
+  }
 
   document.querySelectorAll('.nav-item[data-section]').forEach(el =>
     el.addEventListener('click', e => { e.preventDefault(); navigate(el.dataset.section); })
   );
 
   document.getElementById('logout-btn')?.addEventListener('click', async () => {
-    await api('POST', '/api/auth/logout');
-    window.location.href = '/';
+    try { await api('POST', '/api/auth/logout'); } catch (_) {}
+    window.location.replace('/');
   });
 
   document.getElementById('sidebar-toggle')?.addEventListener('click', () =>
@@ -723,7 +753,7 @@ async function init() {
 
   navigate('overview');
 
-  setInterval(async () => { await loadAll(); updateAlertBadge(); }, 5 * 60 * 1000);
+  setInterval(async () => { try { await loadAll(); updateAlertBadge(); } catch (_) {} }, 5 * 60 * 1000);
 }
 
 document.addEventListener('DOMContentLoaded', init);
