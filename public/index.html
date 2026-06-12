@@ -4,11 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SaTashkent – Boshqaruv Paneli</title>
+  <!-- Shriftlar va ikonkalar CDN dan — internet boʻlmasa ham asosiy funksiya ishlaydi -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
-  <link rel="stylesheet" href="/style.css?v=3" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.29.0/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/style.css?v=4" />
 </head>
 <body>
   <!-- Sidebar -->
@@ -91,6 +92,16 @@
   <!-- Toast -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="/app.js?v=3"></script>
+  <!-- Modullar — yuklash tartibi muhim -->
+  <script src="/js/state.js?v=4"></script>
+  <script src="/js/api.js?v=4"></script>
+  <script src="/js/helpers.js?v=4"></script>
+  <script src="/js/ui.js?v=4"></script>
+  <script src="/js/overview.js?v=4"></script>
+  <script src="/js/products.js?v=4"></script>
+  <script src="/js/purchases.js?v=4"></script>
+  <script src="/js/branches.js?v=4"></script>
+  <script src="/js/report.js?v=4"></script>
+  <script src="/js/main.js?v=4"></script>
 </body>
 </html>
