@@ -1,13 +1,18 @@
 @echo off
-REM ── Yangi kodni tortib olib, fonda ishlayotgan serverni yangilash ──
+REM ── Yangi kodni tortib, serverni qaytadan toza ishga tushirish ──
 cd /d "%~dp0"
 
-echo Eng yangi kod tortib olinmoqda...
-call git pull origin claude/loving-keller-wjksm4
+echo Eski server to'xtatilmoqda...
+taskkill /F /IM node.exe >nul 2>&1
 
-echo Server qayta ishga tushirilmoqda...
-call pm2 restart satashkent
+echo Eng yangi kod tortib olinmoqda...
+git pull origin claude/loving-keller-wjksm4
 
 echo.
-echo TAYYOR! Brauzerda Ctrl+F5 bosing: http://localhost:8080
-pause
+echo ============================================
+echo  Server ishga tushdi: http://localhost:8080
+echo  To'xtatish uchun: Ctrl+C
+echo  Brauzerda Ctrl+F5 bosing!
+echo ============================================
+echo.
+node server.js
