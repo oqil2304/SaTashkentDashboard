@@ -158,7 +158,6 @@ function renderOverviewList() {
       <div style="font-size:15px;font-weight:700">
         <i class="ti ti-${icon}" style="color:#94a3b8;margin-right:6px"></i>${title}
       </div>
-      ${isAdmin() ? `<button class="btn btn-primary btn-sm" onclick="openAddProduct()"><i class="ti ti-plus"></i>Qoʻshish</button>` : ''}
     </div>
     <div class="card"><div class="table-wrap"><table>
       <thead><tr>
