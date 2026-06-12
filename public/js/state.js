@@ -5,6 +5,7 @@ let currentSection = 'overview';
 let branches   = [];
 let products   = [];
 let purchases  = [];
+let consumptions = [];
 let categories = [];
 let currentUser = null;
 let users = [];

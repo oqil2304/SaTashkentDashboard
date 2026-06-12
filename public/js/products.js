@@ -9,8 +9,8 @@ function renderProducts(c) {
 
   c.innerHTML = `
     <div class="section-header">
-      <div class="section-title">Barcha mahsulotlar</div>
-      <button class="btn btn-primary" onclick="openAddProduct()"><i class="ti ti-plus"></i>Qoʻshish</button>
+      <div class="section-title">Ombor — barcha mahsulotlar</div>
+      <button class="btn btn-primary" onclick="openAddProduct()"><i class="ti ti-plus"></i>Mahsulot qoʻshish</button>
     </div>
     <div class="filter-bar">
       <select class="form-select" id="pf-br" onchange="applyProductFilter()">
@@ -58,11 +58,12 @@ function applyProductFilter() {
       <td>${p.category ? `<span class="badge badge-blue">${esc(p.category)}</span>` : '—'}</td>
       <td><span class="badge badge-gray">${esc(p.branch_name || brName(p.branch_id))}</span></td>
       <td style="font-weight:600">${p.current_stock} ${esc(p.unit)}</td>
-      <td style="color:#64748b">${p.daily_usage} ${esc(p.unit)}/kun</td>
+      <td style="color:#64748b">${p.daily_usage > 0 ? `${p.daily_usage} ${esc(p.unit)}/kun` : '—'}</td>
       <td style="font-weight:700;color:${daysColor(d)}">${isFinite(d) ? d.toFixed(1) : '—'}</td>
       <td>${statusBadge(d)}</td>
       <td style="white-space:nowrap;text-align:right">
-        <button class="btn btn-sm btn-secondary btn-icon" onclick="openAddPurchase(${p.id})" title="Sotib olish"><i class="ti ti-shopping-cart"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openAddPurchase(${p.id})" title="Sotib olish (kirim)"><i class="ti ti-shopping-cart"></i></button>
+        <button class="btn btn-sm btn-secondary btn-icon" onclick="openAddConsumption(${p.id})" title="Rasxod (chiqim)"><i class="ti ti-package-export"></i></button>
         <button class="btn btn-sm btn-secondary btn-icon" onclick="openEditProduct(${p.id})" title="Tahrirlash"><i class="ti ti-edit"></i></button>
         <button class="btn btn-sm btn-danger btn-icon" onclick="delProduct(${p.id})" title="Oʻchirish"><i class="ti ti-trash"></i></button>
       </td>
@@ -95,8 +96,8 @@ function openAddProduct() {
       <div class="form-row">
         <div class="form-group"><label class="form-label">Ombordagi miqdor</label>
           <input class="form-control" id="ms" type="number" value="0"></div>
-        <div class="form-group"><label class="form-label">Kunlik sarflanish</label>
-          <input class="form-control" id="md" type="number" step="0.1" value="1"></div>
+        <div class="form-group"><label class="form-label">Kunlik sarflanish (ixtiyoriy)</label>
+          <input class="form-control" id="md" type="number" step="0.1" placeholder="0 — faqat kerakda ishlatiladi"></div>
       </div>
       <div class="form-group"><label class="form-label">Izoh</label>
         <input class="form-control" id="mnote" placeholder="Qoʻshimcha maʼlumot"></div>
@@ -132,8 +133,8 @@ function openEditProduct(id) {
       <div class="form-row">
         <div class="form-group"><label class="form-label">Ombordagi miqdor</label>
           <input class="form-control" id="ms" type="number" value="${p.current_stock}"></div>
-        <div class="form-group"><label class="form-label">Kunlik sarflanish</label>
-          <input class="form-control" id="md" type="number" step="0.1" value="${p.daily_usage}"></div>
+        <div class="form-group"><label class="form-label">Kunlik sarflanish (ixtiyoriy)</label>
+          <input class="form-control" id="md" type="number" step="0.1" value="${p.daily_usage || ''}" placeholder="0 — faqat kerakda ishlatiladi"></div>
       </div>
       <div class="form-group"><label class="form-label">Izoh</label>
         <input class="form-control" id="mnote" value="${esc(p.note || '')}"></div>
@@ -152,7 +153,7 @@ async function saveProduct(id) {
     branch_id:     document.getElementById('mb').value || null,
     unit:          document.getElementById('mu').value,
     current_stock: parseFloat(document.getElementById('ms').value) || 0,
-    daily_usage:   parseFloat(document.getElementById('md').value) || 1,
+    daily_usage:   parseFloat(document.getElementById('md').value) || 0,
     note:          document.getElementById('mnote').value
   };
   try {

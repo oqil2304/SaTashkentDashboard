@@ -8,11 +8,13 @@ async function loadAll() {
     api('GET', '/api/products'),
     api('GET', '/api/purchases'),
     api('GET', '/api/categories'),
+    api('GET', '/api/consumptions'),
   ]);
-  branches   = results[0];
-  products   = results[1];
-  purchases  = results[2];
-  categories = results[3];
+  branches     = results[0];
+  products     = results[1];
+  purchases    = results[2];
+  categories   = results[3];
+  consumptions = results[4];
   console.log('[main.js] loadAll tugadi — branches:', branches.length, 'products:', products.length, 'purchases:', purchases.length);
   updateAlertBadge();
 }
@@ -24,8 +26,9 @@ function navigate(section) {
   );
   const titles = {
     overview:  "Umumiy koʻrinish",
-    products:  'Mahsulotlar',
+    products:  'Ombor',
     purchases: 'Sotib olishlar',
+    consumptions: 'Rasxodlar',
     branches:  'Filiallar',
     report:    'Hisobot',
     users:     'Foydalanuvchilar',
@@ -43,6 +46,7 @@ function renderSection(s) {
     case 'overview':  renderOverview(c);  break;
     case 'products':  renderProducts(c);  break;
     case 'purchases': renderPurchases(c); break;
+    case 'consumptions': renderConsumptions(c); break;
     case 'branches':  renderBranches(c);  break;
     case 'report':    renderReport(c);    break;
     case 'users':     renderUsers(c);     break;

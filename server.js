@@ -241,7 +241,7 @@ app.post('/api/products', auth, adminOnly, async (req, res) => {
   try {
     const r = await db.run2(
       'INSERT INTO products (branch_id,name,category,unit,daily_usage,current_stock,min_stock,note) VALUES (?,?,?,?,?,?,?,?)',
-      [branch_id||null, name, category||'', unit||'', daily_usage||1, current_stock||0, min_stock||0, note||'']
+      [branch_id||null, name, category||'', unit||'', daily_usage||0, current_stock||0, min_stock||0, note||'']
     );
     res.status(201).json(await db.get2('SELECT p.*,b.name as branch_name FROM products p LEFT JOIN branches b ON p.branch_id=b.id WHERE p.id=?', [r.lastID]));
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -250,13 +250,14 @@ app.put('/api/products/:id', auth, adminOnly, async (req, res) => {
   const { branch_id, name, category, unit, daily_usage, current_stock, min_stock, note } = req.body;
   try {
     await db.run2('UPDATE products SET branch_id=?,name=?,category=?,unit=?,daily_usage=?,current_stock=?,min_stock=?,note=? WHERE id=?',
-      [branch_id||null, name, category||'', unit||'', daily_usage||1, current_stock||0, min_stock||0, note||'', req.params.id]);
+      [branch_id||null, name, category||'', unit||'', daily_usage||0, current_stock||0, min_stock||0, note||'', req.params.id]);
     res.json(await db.get2('SELECT p.*,b.name as branch_name FROM products p LEFT JOIN branches b ON p.branch_id=b.id WHERE p.id=?', [req.params.id]));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.delete('/api/products/:id', auth, adminOnly, async (req, res) => {
   try {
     await db.run2('DELETE FROM purchases WHERE product_id=?', [req.params.id]);
+    await db.run2('DELETE FROM consumptions WHERE product_id=?', [req.params.id]);
     await db.run2('DELETE FROM products WHERE id=?', [req.params.id]);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -309,6 +310,48 @@ app.delete('/api/purchases/:id', auth, adminOnly, async (req, res) => {
     const p = await db.get2('SELECT * FROM purchases WHERE id=?', [req.params.id]);
     if (p) await db.run2('UPDATE products SET current_stock=current_stock-? WHERE id=?', [p.quantity, p.product_id]);
     await db.run2('DELETE FROM purchases WHERE id=?', [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Consumptions (Rasxod — ombordan chiqim)
+const CONS_SELECT = `SELECT co.*, pr.name as product_name, pr.unit,
+    fb.name as from_branch_name, tb.name as to_branch_name
+  FROM consumptions co
+  LEFT JOIN products pr ON co.product_id=pr.id
+  LEFT JOIN branches fb ON co.from_branch_id=fb.id
+  LEFT JOIN branches tb ON co.to_branch_id=tb.id`;
+
+app.get('/api/consumptions', auth, async (req, res) => {
+  let sql = CONS_SELECT + ' WHERE 1=1';
+  const params = [];
+  if (req.query.to_branch_id) { sql += ' AND co.to_branch_id=?'; params.push(req.query.to_branch_id); }
+  if (req.query.date_from)    { sql += ' AND co.consume_date>=?'; params.push(req.query.date_from); }
+  if (req.query.date_to)      { sql += ' AND co.consume_date<=?'; params.push(req.query.date_to); }
+  try { res.json(await db.all2(sql + ' ORDER BY co.consume_date DESC, co.id DESC', params)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/consumptions', auth, adminOnly, async (req, res) => {
+  const { product_id, quantity, to_branch_id, consume_date, note } = req.body;
+  if (!product_id || !quantity) return res.status(400).json({ error: 'Mahsulot va miqdor kerak' });
+  try {
+    const prod = await db.get2('SELECT * FROM products WHERE id=?', [product_id]);
+    if (!prod) return res.status(404).json({ error: 'Mahsulot topilmadi' });
+    if (Number(quantity) > Number(prod.current_stock))
+      return res.status(400).json({ error: `Omborda yetarli emas (mavjud: ${prod.current_stock} ${prod.unit || ''})` });
+    const r = await db.run2(
+      'INSERT INTO consumptions (product_id,quantity,from_branch_id,to_branch_id,consume_date,note) VALUES (?,?,?,?,?,?)',
+      [product_id, quantity, prod.branch_id, to_branch_id || prod.branch_id, consume_date || new Date().toISOString().split('T')[0], note || '']
+    );
+    await db.run2('UPDATE products SET current_stock=current_stock-? WHERE id=?', [quantity, product_id]);
+    res.status(201).json(await db.get2(CONS_SELECT + ' WHERE co.id=?', [r.lastID]));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/consumptions/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const c = await db.get2('SELECT * FROM consumptions WHERE id=?', [req.params.id]);
+    if (c) await db.run2('UPDATE products SET current_stock=current_stock+? WHERE id=?', [c.quantity, c.product_id]);
+    await db.run2('DELETE FROM consumptions WHERE id=?', [req.params.id]);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
