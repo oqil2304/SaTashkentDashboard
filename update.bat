@@ -1,27 +1,14 @@
 @echo off
-REM ── Yangi kodni tortib, serverni qaytadan toza ishga tushirish ──
+REM ── Yangi kodni tortib, serverni qaytadan ishga tushirish ──
+REM DIQQAT: bu fayl boshqa o'zgartirilmaydi (o'zini-o'zi yangilash muammosini oldini olish uchun)
 cd /d "%~dp0"
 
 echo Eski server to'xtatilmoqda...
 taskkill /F /IM node.exe >nul 2>&1
 
 echo Eng yangi kod tortib olinmoqda...
-git checkout -- package-lock.json
+git checkout -- package-lock.json >nul 2>&1
 git pull origin claude/loving-keller-wjksm4
-npm install --silent
 
-echo.
-echo ============================================
-echo  Server ishga tushdi: http://localhost:8080
-echo  To'xtatish uchun: Ctrl+C
-echo  Brauzerda Ctrl+F5 bosing!
-echo ============================================
-echo.
-node server.js
-
-echo.
-echo ============================================
-echo  Server TO'XTADI yoki XATOLIK yuz berdi.
-echo  Yuqoridagi xato matnini o'qing.
-echo ============================================
-pause
+REM Serverni alohida (yangilangan) skript orqali ishga tushiramiz
+call run.bat
