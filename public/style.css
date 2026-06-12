@@ -436,6 +436,35 @@ tbody td {
   margin-bottom: 16px;
 }
 
+/* ─── Umumiy select (hisobot oy/yil) ─────────────────── */
+.form-select {
+  height: 40px;
+  padding: 0 38px 0 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  color: var(--text);
+  background-color: var(--card);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239E1C20' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6l6 -6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  outline: none;
+  box-shadow: 0 1px 2px rgba(74,13,16,0.06);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.form-select:hover { border-color: var(--teal); }
+.form-select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(158,28,32,0.12);
+}
+.form-select option { color: var(--text); font-weight: 500; }
+
 .filter-bar .form-select,
 .filter-bar .form-input {
   height: 36px;
@@ -443,12 +472,15 @@ tbody td {
   border: 1.5px solid var(--border);
   border-radius: 8px;
   font-size: 13px;
+  font-weight: 500;
   font-family: 'Inter', sans-serif;
   color: var(--text);
-  background: var(--card);
+  background-color: var(--card);
   outline: none;
+  box-shadow: none;
   transition: border-color 0.15s;
 }
+.filter-bar .form-select { padding: 0 34px 0 12px; }
 
 .filter-bar .form-select:focus,
 .filter-bar .form-input:focus {
