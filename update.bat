@@ -6,7 +6,9 @@ echo Eski server to'xtatilmoqda...
 taskkill /F /IM node.exe >nul 2>&1
 
 echo Eng yangi kod tortib olinmoqda...
+git checkout -- package-lock.json
 git pull origin claude/loving-keller-wjksm4
+npm install --silent
 
 echo.
 echo ============================================
