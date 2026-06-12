@@ -71,7 +71,7 @@ function renderOverview(c) {
       <div style="font-size:15px;font-weight:700">
         <i class="ti ti-clock" style="color:#94a3b8;margin-right:6px"></i>Kam qolgan mahsulotlar (≤7 kun)
       </div>
-      <button class="btn btn-primary btn-sm" onclick="openAddProduct()"><i class="ti ti-plus"></i>Qoʻshish</button>
+      <button class="btn btn-primary btn-sm admin-only" onclick="openAddProduct()"><i class="ti ti-plus"></i>Qoʻshish</button>
     </div>
     <div class="card">
       <div class="table-wrap">
@@ -93,7 +93,7 @@ function renderOverview(c) {
                 <td style="font-weight:700;color:${daysColor(d)}">${isFinite(d) ? d.toFixed(1) + ' kun' : '—'}</td>
                 <td>${statusBadge(d)}</td>
                 <td>
-                  <button class="btn btn-sm btn-primary" onclick="openAddPurchase(${p.id})">
+                  <button class="btn btn-sm btn-primary admin-only" onclick="openAddPurchase(${p.id})">
                     <i class="ti ti-shopping-cart"></i>Sotib olish
                   </button>
                 </td>

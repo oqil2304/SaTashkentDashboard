@@ -77,7 +77,7 @@ async function init() {
   } catch (e) {
     console.error('[main.js] /api/me xatosi:', e);
     if (e.status === 401) {
-      window.location.replace('/');
+      window.location.replace('/login');
       return;
     }
     showError('/api/me xatosi: ' + e.message);
@@ -90,7 +90,7 @@ async function init() {
   } catch (e) {
     console.error('[main.js] loadAll xatosi:', e);
     if (e.status === 401) {
-      window.location.replace('/');
+      window.location.replace('/login');
       return;
     }
     showError('Maʼlumot yuklashda xato: ' + e.message);
@@ -105,7 +105,7 @@ async function init() {
   // Chiqish
   document.getElementById('logout-btn')?.addEventListener('click', async () => {
     try { await api('POST', '/api/auth/logout'); } catch (_) {}
-    window.location.replace('/');
+    window.location.replace('/login');
   });
 
   // Sidebar toggle (mobil)
