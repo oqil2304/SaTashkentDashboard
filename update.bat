@@ -18,3 +18,10 @@ echo  Brauzerda Ctrl+F5 bosing!
 echo ============================================
 echo.
 node server.js
+
+echo.
+echo ============================================
+echo  Server TO'XTADI yoki XATOLIK yuz berdi.
+echo  Yuqoridagi xato matnini o'qing.
+echo ============================================
+pause
