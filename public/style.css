@@ -280,7 +280,11 @@ html, body {
   align-items: center;
   gap: 16px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
 }
+.stat-card.clickable { cursor: pointer; }
+.stat-card.clickable:hover { border-color: var(--teal); box-shadow: 0 4px 14px rgba(158,28,32,0.12); }
+.stat-card.active { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(158,28,32,0.18); }
 
 .stat-icon {
   width: 48px; height: 48px;
