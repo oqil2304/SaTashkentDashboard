@@ -12,8 +12,10 @@ function toast(msg, type = 'success') {
   setTimeout(() => el.remove(), 3500);
 }
 
-function openModal(html) {
-  document.getElementById('modal-box').innerHTML = html;
+function openModal(html, wide = false) {
+  const box = document.getElementById('modal-box');
+  box.innerHTML = html;
+  box.classList.toggle('wide', wide);
   document.getElementById('modal-overlay').classList.add('open');
 }
 
