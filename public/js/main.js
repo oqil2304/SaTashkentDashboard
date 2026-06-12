@@ -113,8 +113,20 @@ async function init() {
     document.getElementById('sidebar').classList.toggle('open')
   );
 
-  // Bell tugmasi
-  document.getElementById('alert-btn')?.addEventListener('click', () => navigate('overview'));
+  // Bell tugmasi — qaysi bo'limda bo'lsa ham umumiy ko'rinishga o'tib,
+  // "tugadi" katakchasini ichiga kirmasdan migit qiladi (diqqat tortadi)
+  document.getElementById('alert-btn')?.addEventListener('click', () => {
+    navigate('overview');
+    setTimeout(() => {
+      const el = document.getElementById('finished-reminder');
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('flash');
+      void el.offsetWidth; // animatsiyani qayta ishga tushirish
+      el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 2400);
+    }, 60);
+  });
 
   // Boshlangʻich sahifa
   navigate('overview');

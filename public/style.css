@@ -286,6 +286,26 @@ html, body {
 .stat-card.clickable:hover { border-color: var(--teal); box-shadow: 0 4px 14px rgba(158,28,32,0.12); }
 .stat-card.active { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(158,28,32,0.18); }
 
+/* Tugagan mahsulotlar banneri (papka ichiga kiradi) */
+.finished-banner {
+  display: flex; align-items: center; gap: 14px;
+  background: #fef2f2; border: 1px solid #fecaca; border-radius: 14px;
+  padding: 16px 18px; margin-bottom: 16px; cursor: pointer;
+  transition: box-shadow .15s, border-color .15s, transform .1s;
+}
+.finished-banner:hover { border-color: #f87171; box-shadow: 0 4px 14px rgba(220,38,38,0.14); }
+.finished-banner:active { transform: scale(.995); }
+.finished-banner-icon { font-size: 24px; color: var(--red); flex-shrink: 0; }
+.finished-banner-text { flex: 1; }
+.finished-banner-title { font-size: 15px; font-weight: 700; color: #991b1b; }
+.finished-banner-sub { font-size: 12px; color: #b91c1c; margin-top: 2px; }
+.finished-banner-arrow { font-size: 20px; color: #dc2626; flex-shrink: 0; }
+.finished-banner.flash { animation: bannerFlash 0.6s ease-in-out 3; }
+@keyframes bannerFlash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); border-color: #fecaca; }
+  50%      { box-shadow: 0 0 0 5px rgba(220,38,38,0.35); border-color: #dc2626; }
+}
+
 .stat-icon {
   width: 48px; height: 48px;
   border-radius: 12px;

@@ -3,8 +3,30 @@ console.log('[overview.js] yuklandi');
 
 let overviewFilter = 'low7'; // qaysi karta tanlangan: all | urgent | low7 | spend
 
+// Tugagan mahsulotlar (ombor butunlay tugagan — 0 yoki undan kam kun)
+function finishedProducts() {
+  return products.filter(p => p.daily_usage > 0 && daysLeft(p.current_stock, p.daily_usage) <= 0);
+}
+
+// Shoshilinch mahsulotlar (hali tugamagan, lekin ≤2 kun qolgan)
+function urgentProducts() {
+  return products.filter(p => {
+    const d = daysLeft(p.current_stock, p.daily_usage);
+    return p.daily_usage > 0 && d > 0 && d <= 2;
+  });
+}
+
+// Kam qolgan mahsulotlar (hali tugamagan, ≤7 kun)
+function lowStockProducts() {
+  return products.filter(p => {
+    const d = daysLeft(p.current_stock, p.daily_usage);
+    return p.daily_usage > 0 && d > 0 && d <= 7;
+  });
+}
+
+// Qo'ng'iroq belgisi va reminder — faqat tugagan mahsulotlar
 function alertProducts() {
-  return products.filter(p => p.daily_usage > 0 && daysLeft(p.current_stock, p.daily_usage) <= 2);
+  return finishedProducts();
 }
 
 function updateAlertBadge() {
@@ -18,9 +40,9 @@ function updateAlertBadge() {
 function renderOverview(c) {
   console.log('[overview.js] renderOverview chaqirildi, products:', products.length);
 
-  const alerts      = alertProducts();
-  const urgentCount = alerts.length;
-  const lowStock    = products.filter(p => p.daily_usage > 0 && daysLeft(p.current_stock, p.daily_usage) <= 7);
+  const finished    = finishedProducts();
+  const urgentCount = urgentProducts().length;
+  const lowStock    = lowStockProducts();
 
   const now = new Date();
   const ym  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -53,23 +75,52 @@ function renderOverview(c) {
       </div>
     </div>
 
-    ${urgentCount ? `
-    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px">
-      <i class="ti ti-bell-ringing" style="font-size:22px;color:var(--red);flex-shrink:0;margin-top:2px"></i>
-      <div>
-        <div style="font-size:14px;font-weight:700;color:#991b1b;margin-bottom:4px">⚠️ ${urgentCount} ta mahsulot tugab qolmoqda!</div>
-        <div style="font-size:12px;color:#b91c1c">
-          ${alerts.map(a => {
-            const d = daysLeft(a.current_stock, a.daily_usage);
-            return `<b>${esc(a.name)}</b> (${esc(brName(a.branch_id))}) — ${d <= 0 ? 'Tugagan' : d.toFixed(1) + ' kun'}`;
-          }).join(' · ')}
-        </div>
+    ${finished.length ? `
+    <div id="finished-reminder" class="finished-banner" onclick="openFinishedDetail()">
+      <i class="ti ti-bell-ringing finished-banner-icon"></i>
+      <div class="finished-banner-text">
+        <div class="finished-banner-title">⚠️ ${finished.length} ta mahsulot tugadi!</div>
+        <div class="finished-banner-sub">Roʻyxatni koʻrish uchun bosing</div>
       </div>
+      <i class="ti ti-chevron-right finished-banner-arrow"></i>
     </div>` : ''}
 
     <div id="ov-list"></div>`;
 
   renderOverviewList();
+}
+
+// Tugagan mahsulotlar ro'yxati — papka ichiga kirganday alohida sahifa
+function openFinishedDetail() {
+  const c = document.getElementById('content');
+  const list = finishedProducts();
+
+  const rows = list.length ? list.map(p => {
+    const d = daysLeft(p.current_stock, p.daily_usage);
+    return `<tr>
+      <td style="font-weight:600">${esc(p.name)}</td>
+      <td><span class="badge badge-gray">${esc(p.branch_name || brName(p.branch_id))}</span></td>
+      <td><span class="badge badge-gray">${esc(p.category || '—')}</span></td>
+      <td style="font-weight:700;color:var(--red)">${p.current_stock} ${esc(p.unit)}</td>
+      <td style="color:#64748b">${p.daily_usage} ${esc(p.unit)}/kun</td>
+      <td>${statusBadge(d)}</td>
+      <td>${isAdmin() ? `<button class="btn btn-sm btn-primary" onclick="openAddPurchase(${p.id})"><i class="ti ti-shopping-cart"></i>Sotib olish</button>` : ''}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>Tugagan mahsulot yoʻq</p></div></td></tr>`;
+
+  c.innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+      <button class="btn btn-secondary btn-icon" onclick="navigate('overview')" title="Orqaga"><i class="ti ti-arrow-left"></i></button>
+      <div>
+        <div class="section-title" style="margin:0"><i class="ti ti-bell-ringing" style="color:var(--red);margin-right:6px"></i>Tugagan mahsulotlar</div>
+        <div style="font-size:13px;color:#94a3b8">${list.length} ta mahsulot omborda tugagan</div>
+      </div>
+    </div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>Mahsulot</th><th>Filial</th><th>Kategoriya</th><th>Omborda</th><th>Kunlik sarflanish</th><th>Holat</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div></div>`;
+  paintIcons(c);
 }
 
 // Karta tanlanganda — pastdagi ro'yxatni almashtirish
@@ -146,10 +197,10 @@ function renderOverviewList() {
   if (overviewFilter === 'all') {
     list = products; title = 'Barcha mahsulotlar'; icon = 'box';
   } else if (overviewFilter === 'urgent') {
-    list = products.filter(p => p.daily_usage > 0 && daysLeft(p.current_stock, p.daily_usage) <= 2);
+    list = urgentProducts();
     title = 'Shoshilinch mahsulotlar (≤2 kun)'; icon = 'alarm';
   } else { // low7
-    list = products.filter(p => p.daily_usage > 0 && daysLeft(p.current_stock, p.daily_usage) <= 7);
+    list = lowStockProducts();
     title = 'Kam qolgan mahsulotlar (≤7 kun)'; icon = 'clock';
   }
 
