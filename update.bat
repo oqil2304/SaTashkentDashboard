@@ -1,6 +1,4 @@
 @echo off
-REM ── Yangi kodni tortib, serverni qaytadan ishga tushirish ──
-REM DIQQAT: bu fayl boshqa o'zgartirilmaydi (o'zini-o'zi yangilash muammosini oldini olish uchun)
 cd /d "%~dp0"
 
 echo Eski server to'xtatilmoqda...
@@ -10,5 +8,8 @@ echo Eng yangi kod tortib olinmoqda...
 git checkout -- package-lock.json >nul 2>&1
 git pull origin claude/loving-keller-wjksm4
 
-REM Serverni alohida (yangilangan) skript orqali ishga tushiramiz
-call run.bat
+echo npm install...
+npm install --silent
+
+echo Server yangi oynada ishga tushirilmoqda...
+start "SaTashkent Server" cmd /k "cd /d "%~dp0" && node server.js"
