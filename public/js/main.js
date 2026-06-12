@@ -145,6 +145,18 @@ async function init() {
   // Boshlangʻich sahifa
   navigate('overview');
 
+  // ESC — modal yopish yoki orqaga qaytish
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay?.classList.contains('open')) { closeModal(true); return; }
+    // Inner page (back button bor bo'lsa) — orqaga
+    const backBtn = document.querySelector('#content .btn[onclick^="navigate("]');
+    if (backBtn) { backBtn.click(); return; }
+    // Oddiy bo'limda — overview ga
+    if (currentSection !== 'overview') navigate('overview');
+  });
+
   // Har 5 daqiqada yangilash
   setInterval(async () => {
     try { await loadAll(); updateAlertBadge(); } catch (_) {}
