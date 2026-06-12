@@ -62,6 +62,7 @@ async function init() {
 
   saveDb();
   await seedData();
+  await seedMoreProducts();
 }
 
 // Ustun mavjud boʻlmasa qoʻshish (sql.js da ALTER TABLE ADD COLUMN)
@@ -122,6 +123,94 @@ async function seedData() {
   ]) await db.run2('INSERT INTO purchases (product_id,quantity,unit_price,purchase_date,supplier) VALUES (?,?,?,?,?)',[pIds[pi],q,p,dA(ago),s]);
 
   console.log("✅ Ma'lumotlar bazasi tayyor (admin/admin123)");
+}
+
+async function seedMoreProducts() {
+  const row = await db.get2('SELECT COUNT(*) as cnt FROM products');
+  if (row && row.cnt >= 35) return;
+
+  // Filiallarni topamiz
+  const branchRows = await db.all2('SELECT id, name FROM branches ORDER BY id');
+  if (branchRows.length < 4) return;
+  const bIds = branchRows.map(b => b.id);
+
+  function dA(n) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split('T')[0]; }
+
+  // Qo'shimcha mahsulotlar: [branch_index, name, category, unit, daily_usage, current_stock]
+  const extraProducts = [
+    [0, 'Choy (qora)',        'Oziq-ovqat',   'kg',   0.3,  2],
+    [0, 'Shakar',             'Oziq-ovqat',   'kg',   1.5,  18],
+    [0, 'Printer qog\'oz',   'Ofis',          'quti', 0.8,  5],
+    [0, 'Qo\'l sovuni',      "Uy-ro'zg'or",  'dona', 2,    4],
+    [1, 'Limon',              'Oziq-ovqat',   'kg',   1,    3],
+    [1, 'Pomidor',            'Oziq-ovqat',   'kg',   5,    8],
+    [1, 'Bolg\'or qalampir', 'Oziq-ovqat',   'kg',   2,    6],
+    [1, 'Stol uchun lampa',  'Elektr',        'dona', 0.1,  1],
+    [2, 'Non (bug\'doy)',     'Oziq-ovqat',   'dona', 10,   20],
+    [2, 'Sut',               'Oziq-ovqat',    'litr', 3,    5],
+    [2, 'Tvorog',            'Oziq-ovqat',    'kg',   1,    2],
+    [2, 'Sanitariya spirt',  "Uy-ro'zg'or",  'litr', 0.5,  1],
+    [3, 'Yog\' (sariyog\')', 'Oziq-ovqat',   'kg',   1,    3],
+    [3, 'Qahva',             'Oziq-ovqat',    'gr',   50,   400],
+    [3, 'Suv (ichimlik)',    'Oziq-ovqat',    'litr', 20,   60],
+    [3, 'Printer kartrij',   'Ofis',          'dona', 0.3,  1],
+    [0, 'Kleynoks',          "Uy-ro'zg'or",  'quti', 3,    10],
+    [1, 'Avtobus gazi',      "Yoqilg'i",     'litr', 25,   30],
+    [2, 'USB flesh karta',   'Ofis',          'dona', 0.1,  3],
+    [3, 'Elektr uzaytirkich','Elektr',        'dona', 0.1,  2],
+  ];
+
+  const newPids = [];
+  for (const [bi, n, c, u, du, s] of extraProducts) {
+    const r = await db.run2(
+      'INSERT INTO products (branch_id,name,category,unit,daily_usage,current_stock) VALUES (?,?,?,?,?,?)',
+      [bIds[bi], n, c, u, du, s]
+    );
+    newPids.push(r.lastID);
+  }
+
+  // Har xil oylarda xaridlar: [product_index, qty, price, days_ago, supplier]
+  const extraPurchases = [
+    [0,  5,  85000, 175, 'Hamkor Savdo'],  [0,  4,  87000, 145, 'Hamkor Savdo'],
+    [0,  6,  86000,  90, 'Hamkor Savdo'],  [0,  3,  88000,  30, 'Hamkor Savdo'],
+    [1, 50,   7500, 170, 'Ulgurji Bozor'], [1, 60,   7800, 130, 'Ulgurji Bozor'],
+    [1, 40,   7600,  80, 'Yangi Bozor'],   [1, 55,   8000,  20, 'Yangi Bozor'],
+    [2, 10,  32000, 165, 'Ofis Pro'],      [2,  8,  33000, 110, 'Ofis Pro'],
+    [2, 12,  34000,  60, 'Ofis Dunyo'],    [2,  5,  35000,  10, 'Ofis Dunyo'],
+    [3, 20,  15000, 160, 'Arzon Bozor'],   [3, 25,  15500, 100, 'Arzon Bozor'],
+    [3, 30,  16000,  50, 'Hamkor Savdo'],
+    [4, 30,   3500, 180, 'Fermer Mart'],   [4, 40,   3700, 120, 'Fermer Mart'],
+    [4, 50,   3600,  70, 'Yangi Bozor'],   [4, 35,   3800,  15, 'Yangi Bozor'],
+    [5, 20,   5000, 175, 'Uzum Fermer'],   [5, 25,   5200, 115, 'Uzum Fermer'],
+    [5, 18,   5100,  65, 'Yangi Bozor'],
+    [6, 15,   4500, 170, 'Fermer Mart'],   [6, 20,   4700, 110, 'Fermer Mart'],
+    [7,  5,  95000, 155, 'TechStore'],     [7,  3, 100000,  85, 'TechStore'],
+    [8, 30,  12000, 168, 'Non Zavod'],     [8, 40,  12500, 108, 'Non Zavod'],
+    [8, 35,  13000,  58, 'Non Zavod'],     [8, 50,  13200,   8, 'Non Zavod'],
+    [9, 20,  18000, 162, 'Sut Ferma'],     [9, 25,  18500, 102, 'Sut Ferma'],
+    [9, 15,  19000,  52, 'Sut Ferma'],
+    [10,  5, 35000, 158, 'Sut Ferma'],     [10,  4, 36000,  98, 'Sut Ferma'],
+    [11,  5, 45000, 150, 'Med Savdo'],     [11,  3, 46000,  90, 'Med Savdo'],
+    [12,  8, 95000, 145, 'Yog\' Savdo'],   [12, 10, 97000,  85, 'Yog\' Savdo'],
+    [13, 500, 3500, 140, 'Hamkor Savdo'],  [13, 400, 3600,  80, 'Hamkor Savdo'],
+    [14, 100,  9500, 135, 'Suv Savdo'],    [14, 150,  9800,  75, 'Suv Savdo'],
+    [14, 200, 10000,  25, 'Suv Savdo'],
+    [15,  3, 85000, 130, 'TechStore'],     [15,  2, 87000,  70, 'TechStore'],
+    [16, 50,  8500, 125, 'Arzon Bozor'],   [16, 40,  8700,  65, 'Arzon Bozor'],
+    [17, 100, 9000, 120, 'Neft Savdo'],    [17, 150, 9200,  60, 'Neft Savdo'],
+    [17, 200, 9500,  10, 'Neft Savdo'],
+    [18,  5, 55000, 115, 'TechStore'],     [19,  5, 75000, 110, 'Elektr Bozor'],
+  ];
+
+  for (const [pi, q, p, ago, s] of extraPurchases) {
+    if (pi >= newPids.length) continue;
+    await db.run2(
+      'INSERT INTO purchases (product_id,quantity,unit_price,purchase_date,supplier) VALUES (?,?,?,?,?)',
+      [newPids[pi], q, p, dA(ago), s]
+    );
+  }
+
+  console.log(`✅ Qo'shimcha ${extraProducts.length} ta mahsulot va ${extraPurchases.length} ta xarid qo'shildi`);
 }
 
 module.exports = { db, init };
