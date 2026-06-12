@@ -1,14 +1,15 @@
 :root {
-  --teal: #1D9E75;
-  --teal-light: #e8f8f3;
-  --teal-dark: #157a5a;
-  --sidebar: #0f172a;
-  --sidebar-hover: #1e293b;
+  /* SaTashkent — toʻq qizil (maroon) brend rangi */
+  --teal: #9E1C20;
+  --teal-light: #fbeaea;
+  --teal-dark: #761317;
+  --sidebar: #4a0d10;
+  --sidebar-hover: #6a1418;
   --text: #1e293b;
   --text-muted: #64748b;
-  --bg: #f1f5f9;
+  --bg: #f5f1f1;
   --card: #ffffff;
-  --border: #e2e8f0;
+  --border: #e7dcdc;
   --red: #ef4444;
   --amber: #f59e0b;
   --blue: #3b82f6;
@@ -97,9 +98,9 @@ html, body {
 }
 
 .nav-item.active {
-  background: rgba(29,158,117,0.15);
-  color: #4dd4ac;
-  border-left-color: var(--teal);
+  background: rgba(255,255,255,0.12);
+  color: #ffffff;
+  border-left-color: #f08a8d;
 }
 
 .nav-icon {
@@ -704,6 +705,21 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.8s linear infinite; display: inline-block; }
+
+/* ─── Inline SVG ikonkalar (CDN oʻrnida) ───────────────── */
+.ti-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  vertical-align: -0.125em;
+}
+.ti-svg {
+  width: 1.1em;
+  height: 1.1em;
+  display: block;
+}
+svg.ti-svg.spin { animation: spin 0.8s linear infinite; }
 
 /* ─── Empty state ───────────────────────────────────── */
 .empty-state {
