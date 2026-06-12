@@ -33,7 +33,15 @@ app.get('/', (req, res) => {
   if (token) { try { jwt.verify(token, JWT_SECRET); return res.redirect('/dashboard'); } catch {} }
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
-app.get('/dashboard', auth, (req, res) => { noCache(res); res.sendFile(path.join(__dirname, 'public', 'index.html')); });
+// Sessiya yaroqsiz boʻlsa — 401 JSON emas, login sahifasiga yoʻnaltirish (sikl boʻlmaydi)
+app.get('/dashboard', (req, res) => {
+  noCache(res);
+  const token = req.cookies.token;
+  if (!token) return res.redirect('/');
+  try { jwt.verify(token, JWT_SECRET); }
+  catch { return res.redirect('/'); }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
@@ -43,7 +51,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user || !bcrypt.compareSync(password, user.password_hash))
       return res.status(401).json({ error: "Login yoki parol noto'g'ri" });
     const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('token', token, { httpOnly: true, maxAge: 7*24*60*60*1000 });
+    res.cookie('token', token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 7*24*60*60*1000 });
     res.json({ success: true, user: { id: user.id, username: user.username, role: user.role } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

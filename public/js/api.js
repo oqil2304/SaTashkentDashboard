@@ -5,7 +5,7 @@ async function api(method, url, body) {
   const opts = {
     method,
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin'
+    credentials: 'include'   // cookie'ni har doim yuborish (sessiya 401 bermasligi uchun)
   };
   if (body) opts.body = JSON.stringify(body);
 
