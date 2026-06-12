@@ -45,6 +45,7 @@ function renderSection(s) {
     case 'report':    renderReport(c);    break;
     default: c.innerHTML = `<div class="empty-state"><i class="ti ti-question-mark"></i><p>Boʻlim topilmadi</p></div>`;
   }
+  paintIcons(c);
 }
 
 async function init() {
