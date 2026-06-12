@@ -27,7 +27,9 @@ function navigate(section) {
     products:  'Mahsulotlar',
     purchases: 'Sotib olishlar',
     branches:  'Filiallar',
-    report:    'Hisobot'
+    report:    'Hisobot',
+    users:     'Foydalanuvchilar',
+    profile:   'Shaxsiy kabinet'
   };
   document.getElementById('page-title').textContent = titles[section] || section;
   if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
@@ -43,9 +45,22 @@ function renderSection(s) {
     case 'purchases': renderPurchases(c); break;
     case 'branches':  renderBranches(c);  break;
     case 'report':    renderReport(c);    break;
+    case 'users':     renderUsers(c);     break;
+    case 'profile':   renderProfile(c);   break;
     default: c.innerHTML = `<div class="empty-state"><i class="ti ti-question-mark"></i><p>Boʻlim topilmadi</p></div>`;
   }
   paintIcons(c);
+}
+
+// Sidebar foydalanuvchi maʼlumotini yangilash
+function applyUserToSidebar() {
+  if (!currentUser) return;
+  const av = document.getElementById('user-avatar');
+  const un = document.getElementById('sidebar-username');
+  const rl = document.querySelector('.sidebar-role');
+  if (av) av.textContent = (currentUser.username || 'A')[0].toUpperCase();
+  if (un) un.textContent = currentUser.full_name || currentUser.username;
+  if (rl) rl.textContent = currentUser.role === 'admin' ? 'Administrator' : 'Foydalanuvchi';
 }
 
 async function init() {
@@ -55,10 +70,10 @@ async function init() {
   try {
     currentUser = await api('GET', '/api/me');
     console.log('[main.js] currentUser:', currentUser);
-    const av = document.getElementById('user-avatar');
-    const un = document.getElementById('sidebar-username');
-    if (av) av.textContent = (currentUser.username || 'A')[0].toUpperCase();
-    if (un) un.textContent = currentUser.username;
+    applyUserToSidebar();
+    // Rol asosida koʻrinish: admin boʻlmasa — yozish tugmalari va admin menyu yashiriladi
+    document.body.classList.toggle('role-viewer', !isAdmin());
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = isAdmin() ? '' : 'none');
   } catch (e) {
     console.error('[main.js] /api/me xatosi:', e);
     if (e.status === 401) {

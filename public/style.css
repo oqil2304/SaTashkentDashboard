@@ -375,6 +375,31 @@ tbody td {
 .badge-teal   { background: var(--teal-light); color: var(--teal-dark); }
 .badge-gray   { background: #f1f5f9; color: #64748b; }
 .badge-blue   { background: #eff6ff; color: #2563eb; }
+.badge-green  { background: #f0fdf4; color: #16a34a; }
+
+/* Badge ichidagi inline SVG ikonka oʻlchami */
+.badge .ti-svg, .badge .ti-wrap svg { width: 13px; height: 13px; }
+
+/* ─── Rol: faqat koʻrish (admin emas) — yozish tugmalarini yashirish ── */
+body.role-viewer .section-header .btn-primary,
+body.role-viewer .btn-danger,
+body.role-viewer .btn-secondary.btn-icon { display: none !important; }
+
+/* ─── Shaxsiy kabinet ─────────────────────────────────── */
+.profile-grid { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
+@media (max-width: 768px) { .profile-grid { grid-template-columns: 1fr; } }
+.profile-card { padding: 26px 22px; text-align: center; display: flex; flex-direction: column; align-items: center; }
+.profile-avatar {
+  width: 84px; height: 84px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+  color: #fff; font-size: 34px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 14px;
+}
+.profile-name { font-size: 18px; font-weight: 700; color: var(--text); }
+.profile-username { font-size: 13px; color: #94a3b8; margin-top: 2px; }
+.profile-meta { margin-top: 18px; width: 100%; border-top: 1px solid var(--border); padding-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.profile-meta div { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #64748b; justify-content: center; }
+.profile-meta .ti-svg, .profile-meta .ti-wrap svg { width: 15px; height: 15px; color: var(--teal); }
 
 /* ─── Buttons ───────────────────────────────────────── */
 .btn {

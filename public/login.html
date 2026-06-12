@@ -17,36 +17,49 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 20px;
       background-image: radial-gradient(ellipse at 20% 50%, rgba(158,28,32,0.35) 0%, transparent 55%),
                         radial-gradient(ellipse at 80% 20%, rgba(120,19,23,0.30) 0%, transparent 55%);
     }
     .login-card {
       background: #ffffff;
       border-radius: 20px;
-      padding: 48px 40px;
+      padding: 40px 36px;
       width: 100%;
-      max-width: 400px;
+      max-width: 410px;
       box-shadow: 0 25px 60px rgba(0,0,0,0.45);
     }
-    .logo-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 32px; }
+    .logo-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 24px; }
     .logo-circle {
       width: 80px; height: 80px;
       border-radius: 18px;
       overflow: hidden;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       box-shadow: 0 8px 24px rgba(158,28,32,0.40);
       flex-shrink: 0;
     }
-    .logo-circle img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 0; }
-    .logo-title { font-size: 22px; font-weight: 800; color: #1e293b; text-align: center; }
+    .logo-circle img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .logo-title { font-size: 21px; font-weight: 800; color: #1e293b; text-align: center; }
     .logo-subtitle { font-size: 13px; color: #64748b; margin-top: 4px; text-align: center; }
-    .form-group { margin-bottom: 20px; }
-    .form-label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px; }
+
+    /* Tab tugmalari */
+    .tabs { display: flex; gap: 4px; background: #f4eaea; padding: 4px; border-radius: 12px; margin-bottom: 22px; }
+    .tab {
+      flex: 1; padding: 9px 4px; border: none; background: transparent; cursor: pointer;
+      font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; color: #8a6d6d;
+      border-radius: 9px; transition: all 0.15s;
+    }
+    .tab.active { background: #fff; color: #9E1C20; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+    .pane { display: none; }
+    .pane.active { display: block; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 7px; }
     .input-wrap { position: relative; }
     .input-icon {
       position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-      color: #b08; color: #9ca3af; font-size: 18px; pointer-events: none;
-      display: flex; align-items: center;
+      color: #9ca3af; pointer-events: none; display: flex; align-items: center;
     }
     .input-icon svg { width: 18px; height: 18px; }
     .form-input {
@@ -55,29 +68,40 @@
       font-size: 14px; font-family: 'Inter', sans-serif; color: #1e293b;
       background: #faf7f7; transition: border-color 0.2s, box-shadow 0.2s; outline: none;
     }
-    .form-input:focus {
-      border-color: #9E1C20;
-      box-shadow: 0 0 0 3px rgba(158,28,32,0.12);
-      background: #fff;
-    }
-    .btn-login {
+    .form-input:focus { border-color: #9E1C20; box-shadow: 0 0 0 3px rgba(158,28,32,0.12); background: #fff; }
+    .btn {
       width: 100%; padding: 13px;
       background: linear-gradient(135deg, #9E1C20, #761317);
       color: white; border: none; border-radius: 10px;
       font-size: 15px; font-weight: 600; font-family: 'Inter', sans-serif;
-      cursor: pointer; transition: opacity 0.2s, transform 0.1s; margin-top: 8px;
+      cursor: pointer; transition: opacity 0.2s, transform 0.1s; margin-top: 6px;
     }
-    .btn-login:hover { opacity: 0.92; }
-    .btn-login:active { transform: scale(0.99); }
-    .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
-    .error-msg {
-      background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
-      border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px;
-      display: none; align-items: center; gap: 8px;
+    .btn:hover { opacity: 0.92; }
+    .btn:active { transform: scale(0.99); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .link-row { text-align: center; margin-top: 16px; }
+    .link {
+      background: none; border: none; color: #9E1C20; font-weight: 600; font-size: 13px;
+      cursor: pointer; font-family: 'Inter', sans-serif; text-decoration: none;
     }
-    .error-msg svg { width: 18px; height: 18px; flex-shrink: 0; }
-    .error-msg.show { display: flex; }
-    .hint { text-align: center; font-size: 12px; color: #b9a3a3; margin-top: 20px; }
+    .link:hover { text-decoration: underline; }
+
+    .msg { border-radius: 9px; padding: 11px 14px; font-size: 13px; margin-bottom: 14px; display: none; align-items: center; gap: 8px; line-height: 1.4; }
+    .msg.show { display: flex; }
+    .msg svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .msg.error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
+    .msg.success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; }
+
+    .code-box {
+      background: #fff7ed; border: 1.5px dashed #fb923c; border-radius: 12px;
+      padding: 16px; text-align: center; margin-bottom: 16px; display: none;
+    }
+    .code-box.show { display: block; }
+    .code-box .lbl { font-size: 12px; color: #9a3412; font-weight: 600; margin-bottom: 6px; }
+    .code-box .code { font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #c2410c; }
+    .code-box .hint2 { font-size: 11px; color: #b45309; margin-top: 6px; }
+
+    .hint { text-align: center; font-size: 12px; color: #b9a3a3; margin-top: 18px; }
   </style>
 </head>
 <body>
@@ -90,69 +114,222 @@
       <div class="logo-subtitle">Bosh Boshqaruv Paneli</div>
     </div>
 
-    <div class="error-msg" id="error-msg">
-      <i class="ti ti-alert-circle"></i>
-      <span id="error-text">Xato foydalanuvchi nomi yoki parol</span>
+    <div class="tabs">
+      <button class="tab active" data-pane="login">Kirish</button>
+      <button class="tab" data-pane="register">Ro'yxatdan o'tish</button>
     </div>
 
-    <form id="login-form">
-      <div class="form-group">
-        <label class="form-label" for="username">Foydalanuvchi nomi</label>
-        <div class="input-wrap">
-          <i class="ti ti-user input-icon"></i>
-          <input class="form-input" type="text" id="username" name="username" placeholder="admin" autocomplete="username" required />
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="password">Parol</label>
-        <div class="input-wrap">
-          <i class="ti ti-lock input-icon"></i>
-          <input class="form-input" type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required />
-        </div>
-      </div>
-      <button class="btn-login" type="submit" id="login-btn">Kirish</button>
-    </form>
+    <div class="msg error" id="msg-error"><i class="ti ti-alert-circle"></i><span id="error-text"></span></div>
+    <div class="msg success" id="msg-success"><i class="ti ti-check"></i><span id="success-text"></span></div>
 
-    <div class="hint">admin / admin123</div>
+    <!-- KIRISH -->
+    <div class="pane active" id="pane-login">
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="l-username">Login yoki Gmail</label>
+          <div class="input-wrap">
+            <i class="ti ti-user input-icon"></i>
+            <input class="form-input" type="text" id="l-username" placeholder="admin" autocomplete="username" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="l-password">Parol</label>
+          <div class="input-wrap">
+            <i class="ti ti-lock input-icon"></i>
+            <input class="form-input" type="password" id="l-password" placeholder="••••••••" autocomplete="current-password" required />
+          </div>
+        </div>
+        <button class="btn" type="submit">Kirish</button>
+      </form>
+      <div class="link-row">
+        <button class="link" id="to-forgot">Parolni unutdingizmi?</button>
+      </div>
+      <div class="hint">admin / admin123</div>
+    </div>
+
+    <!-- RO'YXATDAN O'TISH -->
+    <div class="pane" id="pane-register">
+      <form id="register-form">
+        <div class="form-group">
+          <label class="form-label" for="r-fullname">To'liq ism</label>
+          <div class="input-wrap">
+            <i class="ti ti-user input-icon"></i>
+            <input class="form-input" type="text" id="r-fullname" placeholder="Ism Familiya" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="r-username">Login</label>
+          <div class="input-wrap">
+            <i class="ti ti-user input-icon"></i>
+            <input class="form-input" type="text" id="r-username" placeholder="foydalanuvchi" autocomplete="username" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="r-email">Gmail</label>
+          <div class="input-wrap">
+            <i class="ti ti-mail input-icon"></i>
+            <input class="form-input" type="email" id="r-email" placeholder="email@gmail.com" autocomplete="email" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="r-phone">Telefon raqam</label>
+          <div class="input-wrap">
+            <i class="ti ti-phone input-icon"></i>
+            <input class="form-input" type="tel" id="r-phone" placeholder="+998 90 123 45 67" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="r-password">Parol</label>
+          <div class="input-wrap">
+            <i class="ti ti-lock input-icon"></i>
+            <input class="form-input" type="password" id="r-password" placeholder="••••••••" autocomplete="new-password" required />
+          </div>
+        </div>
+        <button class="btn" type="submit">Akkaunt yaratish</button>
+      </form>
+      <div class="hint">Gmail yoki telefon raqamdan kamida bittasi kerak.<br>Admin tasdiqlagach tizimga kirasiz.</div>
+    </div>
+
+    <!-- PAROLNI UNUTDIM -->
+    <div class="pane" id="pane-forgot">
+      <form id="forgot-form">
+        <div class="form-group">
+          <label class="form-label" for="f-account">Login yoki Gmail</label>
+          <div class="input-wrap">
+            <i class="ti ti-user input-icon"></i>
+            <input class="form-input" type="text" id="f-account" placeholder="login yoki email@gmail.com" required />
+          </div>
+        </div>
+        <button class="btn" type="submit">Tiklash kodini olish</button>
+      </form>
+
+      <div class="code-box" id="code-box">
+        <div class="lbl">Sizning tiklash kodingiz:</div>
+        <div class="code" id="reset-code">------</div>
+        <div class="hint2">15 daqiqa amal qiladi. Pastda kodni kiriting.</div>
+      </div>
+
+      <form id="reset-form" style="display:none;margin-top:8px">
+        <div class="form-group">
+          <label class="form-label" for="rs-code">Tiklash kodi</label>
+          <div class="input-wrap">
+            <i class="ti ti-key input-icon"></i>
+            <input class="form-input" type="text" id="rs-code" placeholder="6 xonali kod" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rs-password">Yangi parol</label>
+          <div class="input-wrap">
+            <i class="ti ti-lock input-icon"></i>
+            <input class="form-input" type="password" id="rs-password" placeholder="••••••••" autocomplete="new-password" required />
+          </div>
+        </div>
+        <button class="btn" type="submit">Parolni yangilash</button>
+      </form>
+
+      <div class="link-row">
+        <button class="link" id="to-login"><i class="ti ti-arrow-left" style="vertical-align:-3px"></i> Kirishga qaytish</button>
+      </div>
+    </div>
   </div>
 
-  <script src="/js/icons.js?v=7"></script>
+  <script src="/js/icons.js?v=8"></script>
   <script>
-    const form = document.getElementById('login-form');
-    const errorDiv = document.getElementById('error-msg');
-    const errorText = document.getElementById('error-text');
-    const loginBtn = document.getElementById('login-btn');
+    const $ = id => document.getElementById(id);
+    const errBox = $('msg-error'), okBox = $('msg-success');
+    function showErr(t) { okBox.classList.remove('show'); $('error-text').textContent = t; errBox.classList.add('show'); }
+    function showOk(t)  { errBox.classList.remove('show'); $('success-text').textContent = t; okBox.classList.add('show'); }
+    function clearMsg() { errBox.classList.remove('show'); okBox.classList.remove('show'); }
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      errorDiv.classList.remove('show');
-      loginBtn.disabled = true;
-      loginBtn.textContent = 'Yuklanmoqda...';
+    // Tablar
+    function switchPane(name) {
+      clearMsg();
+      document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+      $('pane-' + name).classList.add('active');
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.pane === name));
+    }
+    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchPane(t.dataset.pane)));
+    $('to-forgot').addEventListener('click', () => switchPane('forgot'));
+    $('to-login').addEventListener('click', () => switchPane('login'));
 
-      const username = document.getElementById('username').value.trim();
-      const password = document.getElementById('password').value;
+    async function post(url, body) {
+      const res = await fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', body: JSON.stringify(body)
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, data };
+    }
 
-      try {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ username, password })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          window.location.href = '/dashboard';
-        } else {
-          errorText.textContent = data.error || 'Kirish xatosi';
-          errorDiv.classList.add('show');
-        }
-      } catch (err) {
-        errorText.textContent = 'Server bilan aloqa xatosi';
-        errorDiv.classList.add('show');
-      } finally {
-        loginBtn.disabled = false;
-        loginBtn.textContent = 'Kirish';
+    // KIRISH
+    $('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault(); clearMsg();
+      const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Yuklanmoqda...';
+      const { ok, data } = await post('/api/auth/login', {
+        username: $('l-username').value.trim(), password: $('l-password').value
+      });
+      if (ok) { window.location.href = '/dashboard'; return; }
+      showErr(data.error || 'Kirish xatosi');
+      btn.disabled = false; btn.textContent = 'Kirish';
+    });
+
+    // RO'YXATDAN O'TISH
+    $('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault(); clearMsg();
+      const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Yaratilmoqda...';
+      const { ok, data } = await post('/api/auth/register', {
+        full_name: $('r-fullname').value.trim(),
+        username: $('r-username').value.trim(),
+        email: $('r-email').value.trim(),
+        phone: $('r-phone').value.trim(),
+        password: $('r-password').value
+      });
+      if (ok) {
+        e.target.reset();
+        switchPane('login');
+        showOk(data.message || 'Akkaunt yaratildi. Admin tasdiqlagach kira olasiz.');
+      } else {
+        showErr(data.error || 'Ro\'yxatdan o\'tish xatosi');
       }
+      btn.disabled = false; btn.textContent = 'Akkaunt yaratish';
+    });
+
+    // PAROLNI UNUTDIM — kod olish
+    $('forgot-form').addEventListener('submit', async (e) => {
+      e.preventDefault(); clearMsg();
+      const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Yuborilmoqda...';
+      const acc = $('f-account').value.trim();
+      const { ok, data } = await post('/api/auth/forgot', { account: acc });
+      if (ok) {
+        $('reset-code').textContent = data.code;
+        $('code-box').classList.add('show');
+        $('reset-form').style.display = 'block';
+        $('rs-code').value = data.code;        // qulaylik uchun avtomatik to'ldiramiz
+        $('reset-form').dataset.account = acc;
+      } else {
+        showErr(data.error || 'Xatolik');
+      }
+      btn.disabled = false; btn.textContent = 'Tiklash kodini olish';
+    });
+
+    // PAROLNI UNUTDIM — yangi parol
+    $('reset-form').addEventListener('submit', async (e) => {
+      e.preventDefault(); clearMsg();
+      const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Yangilanmoqda...';
+      const { ok, data } = await post('/api/auth/reset', {
+        account: $('reset-form').dataset.account || $('f-account').value.trim(),
+        code: $('rs-code').value.trim(),
+        password: $('rs-password').value
+      });
+      if (ok) {
+        switchPane('login');
+        $('code-box').classList.remove('show');
+        $('reset-form').style.display = 'none';
+        showOk(data.message || 'Parol yangilandi, endi kirishingiz mumkin');
+      } else {
+        showErr(data.error || 'Xatolik');
+      }
+      btn.disabled = false; btn.textContent = 'Parolni yangilash';
     });
   </script>
 </body>

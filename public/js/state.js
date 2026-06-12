@@ -7,3 +7,7 @@ let products   = [];
 let purchases  = [];
 let categories = [];
 let currentUser = null;
+let users = [];
+
+// Joriy foydalanuvchi admin-mi?
+function isAdmin() { return currentUser && currentUser.role === 'admin'; }

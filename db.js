@@ -48,15 +48,35 @@ async function init() {
   sqlDb.run(`CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)`);
   sqlDb.run(`CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, branch_id INTEGER, name TEXT NOT NULL, category TEXT, unit TEXT, daily_usage REAL DEFAULT 1, current_stock REAL DEFAULT 0, min_stock REAL DEFAULT 0, note TEXT)`);
   sqlDb.run(`CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, unit_price REAL, purchase_date TEXT, supplier TEXT, note TEXT, created_at TEXT DEFAULT (datetime('now')))`);
+
+  // ── users jadvalini yangilash (eski bazada yangi ustunlar boʻlmasligi mumkin) ──
+  ensureColumn('users', 'email', 'TEXT');
+  ensureColumn('users', 'phone', 'TEXT');
+  ensureColumn('users', 'full_name', 'TEXT');
+  ensureColumn('users', 'status', "TEXT DEFAULT 'active'");
+  ensureColumn('users', 'created_at', 'TEXT');
+  ensureColumn('users', 'reset_code', 'TEXT');
+  ensureColumn('users', 'reset_expires', 'INTEGER');
+  // Eski adminlar 'active' boʻlib qolsin
+  sqlDb.run("UPDATE users SET status='active' WHERE status IS NULL OR status=''");
+
   saveDb();
   await seedData();
+}
+
+// Ustun mavjud boʻlmasa qoʻshish (sql.js da ALTER TABLE ADD COLUMN)
+function ensureColumn(table, col, type) {
+  const info = sqlDb.exec(`PRAGMA table_info(${table})`);
+  const cols = info.length ? info[0].values.map(v => v[1]) : [];
+  if (!cols.includes(col)) sqlDb.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
 }
 
 async function seedData() {
   const row = await db.get2('SELECT COUNT(*) as cnt FROM users');
   if (row && row.cnt > 0) return;
 
-  await db.run2("INSERT INTO users (username,password_hash,role) VALUES (?,?,'admin')", ['admin', bcrypt.hashSync('admin123', 10)]);
+  await db.run2("INSERT INTO users (username,password_hash,role,status,full_name,email,created_at) VALUES (?,?,'admin','active',?,?,datetime('now'))",
+    ['admin', bcrypt.hashSync('admin123', 10), 'Administrator', 'admin@satashkent.uz']);
   for (const c of ['Oziq-ovqat', "Yoqilg'i", "Uy-ro'zg'or", 'Elektr', 'Ofis'])
     await db.run2('INSERT OR IGNORE INTO categories (name) VALUES (?)', [c]);
 

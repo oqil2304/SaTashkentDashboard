@@ -25,6 +25,13 @@ function auth(req, res, next) {
   catch { res.status(401).json({ error: "Token noto'g'ri" }); }
 }
 
+// Faqat admin uchun (foydalanuvchilarni boshqarish, maʼlumot oʻzgartirish)
+function adminOnly(req, res, next) {
+  if (req.user?.role !== 'admin')
+    return res.status(403).json({ error: 'Bu amal uchun administrator huquqi kerak' });
+  next();
+}
+
 function noCache(res) { res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate'); }
 
 app.get('/', (req, res) => {
@@ -49,27 +56,157 @@ app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Login — username YOKI email bilan kirish; status tekshiriladi
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Login va parol kerak' });
   try {
-    const user = await db.get2('SELECT * FROM users WHERE username=?', [username]);
+    const id = String(username).trim().toLowerCase();
+    const user = await db.get2('SELECT * FROM users WHERE lower(username)=? OR lower(email)=?', [id, id]);
     if (!user || !bcrypt.compareSync(password, user.password_hash))
       return res.status(401).json({ error: "Login yoki parol noto'g'ri" });
+    if (user.status === 'pending')
+      return res.status(403).json({ error: 'Akkauntingiz hali admin tomonidan tasdiqlanmagan' });
+    if (user.status === 'blocked')
+      return res.status(403).json({ error: 'Akkauntingiz bloklangan' });
     const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 7*24*60*60*1000 });
     res.json({ success: true, user: { id: user.id, username: user.username, role: user.role } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// Roʻyxatdan oʻtish — status 'pending', rol 'user' (admin tasdiqlaydi)
+app.post('/api/auth/register', async (req, res) => {
+  const { username, password, email, phone, full_name } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: 'Login va parol kerak' });
+  if (!email && !phone) return res.status(400).json({ error: 'Gmail yoki telefon raqam kerak' });
+  if (String(password).length < 4) return res.status(400).json({ error: 'Parol kamida 4 belgidan iborat boʻlsin' });
+  try {
+    const uname = String(username).trim();
+    const exists = await db.get2('SELECT id FROM users WHERE lower(username)=? OR (email IS NOT NULL AND email<>"" AND lower(email)=?)',
+      [uname.toLowerCase(), String(email||'').trim().toLowerCase()]);
+    if (exists) return res.status(409).json({ error: 'Bu login yoki email allaqachon mavjud' });
+    await db.run2(
+      "INSERT INTO users (username,password_hash,role,status,email,phone,full_name,created_at) VALUES (?,?,'user','pending',?,?,?,datetime('now'))",
+      [uname, bcrypt.hashSync(password, 10), String(email||'').trim(), String(phone||'').trim(), String(full_name||'').trim()]
+    );
+    res.status(201).json({ success: true, message: 'Akkaunt yaratildi. Admin tasdiqlagach kira olasiz.' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Parolni unutdim — tiklash kodini yaratish (ekranda koʻrsatiladi)
+app.post('/api/auth/forgot', async (req, res) => {
+  const { account } = req.body || {};
+  if (!account) return res.status(400).json({ error: 'Login yoki email kiriting' });
+  try {
+    const id = String(account).trim().toLowerCase();
+    const user = await db.get2('SELECT * FROM users WHERE lower(username)=? OR lower(email)=?', [id, id]);
+    // Maxfiylik uchun foydalanuvchi yoʻqligini oshkor qilmaymiz, lekin localhost — kodni qaytaramiz
+    if (!user) return res.status(404).json({ error: 'Bunday login yoki email topilmadi' });
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expires = Date.now() + 15 * 60 * 1000; // 15 daqiqa
+    await db.run2('UPDATE users SET reset_code=?, reset_expires=? WHERE id=?', [code, expires, user.id]);
+    res.json({ success: true, code, username: user.username, message: 'Tiklash kodi yaratildi (15 daqiqa amal qiladi)' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Kod orqali yangi parol oʻrnatish
+app.post('/api/auth/reset', async (req, res) => {
+  const { account, code, password } = req.body || {};
+  if (!account || !code || !password) return res.status(400).json({ error: 'Barcha maydonlar kerak' });
+  if (String(password).length < 4) return res.status(400).json({ error: 'Parol kamida 4 belgidan iborat boʻlsin' });
+  try {
+    const id = String(account).trim().toLowerCase();
+    const user = await db.get2('SELECT * FROM users WHERE lower(username)=? OR lower(email)=?', [id, id]);
+    if (!user || !user.reset_code || String(user.reset_code) !== String(code).trim())
+      return res.status(400).json({ error: "Kod noto'g'ri" });
+    if (!user.reset_expires || Date.now() > user.reset_expires)
+      return res.status(400).json({ error: 'Kod muddati tugagan, qaytadan urinib koʻring' });
+    await db.run2('UPDATE users SET password_hash=?, reset_code=NULL, reset_expires=NULL WHERE id=?',
+      [bcrypt.hashSync(password, 10), user.id]);
+    res.json({ success: true, message: 'Parol yangilandi, endi kirishingiz mumkin' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/auth/logout', (req, res) => { res.clearCookie('token'); res.json({ success: true }); });
-app.get('/api/me', auth, (req, res) => res.json({ id: req.user.id, username: req.user.username, role: req.user.role }));
+
+app.get('/api/me', auth, async (req, res) => {
+  try {
+    const u = await db.get2('SELECT id,username,role,email,phone,full_name,status,created_at FROM users WHERE id=?', [req.user.id]);
+    res.json(u || { id: req.user.id, username: req.user.username, role: req.user.role });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Shaxsiy kabinet — oʻz maʼlumotlarini yangilash ──
+app.put('/api/profile', auth, async (req, res) => {
+  const { full_name, email, phone, current_password, new_password } = req.body || {};
+  try {
+    const user = await db.get2('SELECT * FROM users WHERE id=?', [req.user.id]);
+    if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+    // Parol oʻzgartirilayotgan boʻlsa — joriy parol tekshiriladi
+    let passHash = user.password_hash;
+    if (new_password) {
+      if (!current_password || !bcrypt.compareSync(current_password, user.password_hash))
+        return res.status(400).json({ error: "Joriy parol noto'g'ri" });
+      if (String(new_password).length < 4) return res.status(400).json({ error: 'Yangi parol kamida 4 belgidan iborat boʻlsin' });
+      passHash = bcrypt.hashSync(new_password, 10);
+    }
+    await db.run2('UPDATE users SET full_name=?, email=?, phone=?, password_hash=? WHERE id=?',
+      [String(full_name||'').trim(), String(email||'').trim(), String(phone||'').trim(), passHash, req.user.id]);
+    res.json({ success: true, message: 'Maʼlumotlar yangilandi' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: foydalanuvchilarni boshqarish ──
+app.get('/api/users', auth, adminOnly, async (req, res) => {
+  try {
+    res.json(await db.all2('SELECT id,username,role,email,phone,full_name,status,created_at FROM users ORDER BY id'));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Holatni oʻzgartirish (tasdiqlash/bloklash)
+app.put('/api/users/:id/status', auth, adminOnly, async (req, res) => {
+  const { status } = req.body || {};
+  if (!['active', 'pending', 'blocked'].includes(status)) return res.status(400).json({ error: 'Notoʻgʻri holat' });
+  try {
+    await db.run2('UPDATE users SET status=? WHERE id=?', [status, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Rolni oʻzgartirish
+app.put('/api/users/:id/role', auth, adminOnly, async (req, res) => {
+  const { role } = req.body || {};
+  if (!['admin', 'user'].includes(role)) return res.status(400).json({ error: 'Notoʻgʻri rol' });
+  if (parseInt(req.params.id) === req.user.id) return res.status(400).json({ error: 'Oʻz rolingizni oʻzgartira olmaysiz' });
+  try {
+    await db.run2('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Boshqa foydalanuvchi parolini almashtirish
+app.put('/api/users/:id/password', auth, adminOnly, async (req, res) => {
+  const { password } = req.body || {};
+  if (!password || String(password).length < 4) return res.status(400).json({ error: 'Parol kamida 4 belgidan iborat boʻlsin' });
+  try {
+    await db.run2('UPDATE users SET password_hash=?, reset_code=NULL, reset_expires=NULL WHERE id=?',
+      [bcrypt.hashSync(password, 10), req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Foydalanuvchini oʻchirish
+app.delete('/api/users/:id', auth, adminOnly, async (req, res) => {
+  if (parseInt(req.params.id) === req.user.id) return res.status(400).json({ error: 'Oʻzingizni oʻchira olmaysiz' });
+  try {
+    await db.run2('DELETE FROM users WHERE id=?', [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // Branches
 app.get('/api/branches', auth, async (req, res) => {
   try { res.json(await db.all2('SELECT * FROM branches ORDER BY id')); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.post('/api/branches', auth, async (req, res) => {
+app.post('/api/branches', auth, adminOnly, async (req, res) => {
   const { name, address, manager, phone } = req.body;
   if (!name) return res.status(400).json({ error: 'Nomi kerak' });
   try {
@@ -77,14 +214,14 @@ app.post('/api/branches', auth, async (req, res) => {
     res.status(201).json(await db.get2('SELECT * FROM branches WHERE id=?', [r.lastID]));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.put('/api/branches/:id', auth, async (req, res) => {
+app.put('/api/branches/:id', auth, adminOnly, async (req, res) => {
   const { name, address, manager, phone } = req.body;
   try {
     await db.run2('UPDATE branches SET name=?,address=?,manager=?,phone=? WHERE id=?', [name, address||'', manager||'', phone||'', req.params.id]);
     res.json(await db.get2('SELECT * FROM branches WHERE id=?', [req.params.id]));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.delete('/api/branches/:id', auth, async (req, res) => {
+app.delete('/api/branches/:id', auth, adminOnly, async (req, res) => {
   try { await db.run2('DELETE FROM branches WHERE id=?', [req.params.id]); res.json({ success: true }); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -98,7 +235,7 @@ app.get('/api/products', auth, async (req, res) => {
   try { res.json(await db.all2(sql + ' ORDER BY p.id', params)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.post('/api/products', auth, async (req, res) => {
+app.post('/api/products', auth, adminOnly, async (req, res) => {
   const { branch_id, name, category, unit, daily_usage, current_stock, min_stock, note } = req.body;
   if (!name) return res.status(400).json({ error: 'Nomi kerak' });
   try {
@@ -109,7 +246,7 @@ app.post('/api/products', auth, async (req, res) => {
     res.status(201).json(await db.get2('SELECT p.*,b.name as branch_name FROM products p LEFT JOIN branches b ON p.branch_id=b.id WHERE p.id=?', [r.lastID]));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.put('/api/products/:id', auth, async (req, res) => {
+app.put('/api/products/:id', auth, adminOnly, async (req, res) => {
   const { branch_id, name, category, unit, daily_usage, current_stock, min_stock, note } = req.body;
   try {
     await db.run2('UPDATE products SET branch_id=?,name=?,category=?,unit=?,daily_usage=?,current_stock=?,min_stock=?,note=? WHERE id=?',
@@ -117,7 +254,7 @@ app.put('/api/products/:id', auth, async (req, res) => {
     res.json(await db.get2('SELECT p.*,b.name as branch_name FROM products p LEFT JOIN branches b ON p.branch_id=b.id WHERE p.id=?', [req.params.id]));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.delete('/api/products/:id', auth, async (req, res) => {
+app.delete('/api/products/:id', auth, adminOnly, async (req, res) => {
   try {
     await db.run2('DELETE FROM purchases WHERE product_id=?', [req.params.id]);
     await db.run2('DELETE FROM products WHERE id=?', [req.params.id]);
@@ -137,7 +274,7 @@ app.get('/api/purchases', auth, async (req, res) => {
   try { res.json(await db.all2(sql + ' ORDER BY pu.purchase_date DESC,pu.id DESC', params)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.post('/api/purchases', auth, async (req, res) => {
+app.post('/api/purchases', auth, adminOnly, async (req, res) => {
   const { product_id, quantity, unit_price, purchase_date, supplier, note } = req.body;
   if (!product_id || !quantity) return res.status(400).json({ error: 'Mahsulot va miqdor kerak' });
   try {
@@ -152,7 +289,7 @@ app.post('/api/purchases', auth, async (req, res) => {
     ));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.put('/api/purchases/:id', auth, async (req, res) => {
+app.put('/api/purchases/:id', auth, adminOnly, async (req, res) => {
   const { product_id, quantity, unit_price, purchase_date, supplier, note } = req.body;
   try {
     const old = await db.get2('SELECT * FROM purchases WHERE id=?', [req.params.id]);
@@ -167,7 +304,7 @@ app.put('/api/purchases/:id', auth, async (req, res) => {
     ));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.delete('/api/purchases/:id', auth, async (req, res) => {
+app.delete('/api/purchases/:id', auth, adminOnly, async (req, res) => {
   try {
     const p = await db.get2('SELECT * FROM purchases WHERE id=?', [req.params.id]);
     if (p) await db.run2('UPDATE products SET current_stock=current_stock-? WHERE id=?', [p.quantity, p.product_id]);
