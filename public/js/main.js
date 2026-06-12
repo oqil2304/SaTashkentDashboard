@@ -56,16 +56,26 @@ function renderSection(s) {
   paintIcons(c);
 }
 
+const ROLE_LABELS = { admin: 'Administrator', branch: 'Filial omborchisi', viewer: 'Kuzatuvchi', user: 'Foydalanuvchi' };
+
 // Sidebar foydalanuvchi maʼlumotini yangilash
 function applyUserToSidebar() {
   if (!currentUser) return;
   const av = document.getElementById('user-avatar');
   const un = document.getElementById('sidebar-username');
-  const rl = document.querySelector('.sidebar-role');
-  if (av) av.textContent = (currentUser.username || 'A')[0].toUpperCase();
+  const rl = document.getElementById('sidebar-role');
+  if (av) {
+    if (currentUser.avatar) {
+      av.innerHTML = `<img src="${currentUser.avatar}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    } else {
+      av.textContent = (currentUser.full_name || currentUser.username || 'A')[0].toUpperCase();
+    }
+  }
   if (un) un.textContent = currentUser.full_name || currentUser.username;
-  if (rl) rl.textContent = currentUser.role === 'admin' ? 'Administrator' : 'Foydalanuvchi';
+  if (rl) rl.textContent = ROLE_LABELS[currentUser.role] || currentUser.role;
 }
+
+function isWriter() { return currentUser && (currentUser.role === 'admin' || currentUser.role === 'branch'); }
 
 async function init() {
   console.log('[main.js] init boshlandi');
@@ -75,8 +85,8 @@ async function init() {
     currentUser = await api('GET', '/api/me');
     console.log('[main.js] currentUser:', currentUser);
     applyUserToSidebar();
-    // Rol asosida koʻrinish: admin boʻlmasa — yozish tugmalari va admin menyu yashiriladi
-    document.body.classList.toggle('role-viewer', !isAdmin());
+    // Rol asosida ko'rinish
+    document.body.classList.toggle('role-viewer', !isWriter());
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = isAdmin() ? '' : 'none');
   } catch (e) {
     console.error('[main.js] /api/me xatosi:', e);

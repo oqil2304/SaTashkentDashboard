@@ -58,6 +58,8 @@ async function init() {
   ensureColumn('users', 'created_at', 'TEXT');
   ensureColumn('users', 'reset_code', 'TEXT');
   ensureColumn('users', 'reset_expires', 'INTEGER');
+  ensureColumn('users', 'branch_id', 'INTEGER');
+  ensureColumn('users', 'avatar', 'TEXT');
   // Eski adminlar 'active' boʻlib qolsin
   sqlDb.run("UPDATE users SET status='active' WHERE status IS NULL OR status=''");
 

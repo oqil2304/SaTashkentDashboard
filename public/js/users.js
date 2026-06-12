@@ -13,6 +13,12 @@ function userStatusBadge(s) {
   return `<span class="badge badge-gray">${esc(s || '')}</span>`;
 }
 
+function userRoleBadge(u) {
+  const labels = { admin: ['badge-red','Administrator'], branch: ['badge-amber','Filial omborchisi'], viewer: ['badge-blue','Kuzatuvchi'], user: ['badge-gray','Foydalanuvchi'] };
+  const [cls, label] = labels[u.role] || ['badge-gray', u.role];
+  return `<span class="badge ${cls}"><i class="ti ti-shield"></i>${label}</span>`;
+}
+
 async function renderUsers(c) {
   c.innerHTML = `<div class="loading-state"><i class="ti ti-loader-2 spin"></i><span>Yuklanmoqda...</span></div>`;
   await loadUsers();
@@ -29,21 +35,31 @@ async function renderUsers(c) {
     <div class="card">
       <div class="table-wrap"><table>
         <thead><tr>
-          <th>Foydalanuvchi</th><th>Aloqa</th><th>Rol</th><th>Holat</th><th>Roʻyxatdan</th><th style="text-align:right">Amallar</th>
+          <th>Foydalanuvchi</th><th>Aloqa</th><th>Rol / Filial</th><th>Holat</th><th>Roʻyxatdan</th><th style="text-align:right">Amallar</th>
         </tr></thead>
         <tbody>
           ${users.map(u => `
             <tr>
               <td>
-                <div style="font-weight:600">${esc(u.full_name || u.username)}</div>
-                <div style="font-size:12px;color:#94a3b8">@${esc(u.username)}</div>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:34px;height:34px;border-radius:50%;background:var(--teal);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px">
+                    ${u.avatar ? `<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover">` : (u.full_name||u.username||'?')[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <div style="font-weight:600">${esc(u.full_name || u.username)}</div>
+                    <div style="font-size:12px;color:#94a3b8">@${esc(u.username)}</div>
+                  </div>
+                </div>
               </td>
               <td style="font-size:13px;color:#64748b">
                 ${u.email ? `<div><i class="ti ti-mail" style="font-size:13px"></i> ${esc(u.email)}</div>` : ''}
                 ${u.phone ? `<div><i class="ti ti-phone" style="font-size:13px"></i> ${esc(u.phone)}</div>` : ''}
                 ${(!u.email && !u.phone) ? '—' : ''}
               </td>
-              <td><span class="badge ${u.role === 'admin' ? 'badge-red' : 'badge-gray'}"><i class="ti ti-shield"></i>${u.role === 'admin' ? 'Admin' : 'Foydalanuvchi'}</span></td>
+              <td>
+                <div>${userRoleBadge(u)}</div>
+                ${u.branch_name ? `<div style="font-size:12px;color:#64748b;margin-top:3px"><i class="ti ti-building-store" style="font-size:11px"></i> ${esc(u.branch_name)}</div>` : ''}
+              </td>
               <td>${userStatusBadge(u.status)}</td>
               <td style="font-size:12px;color:#94a3b8">${u.created_at ? esc(String(u.created_at).split(' ')[0]) : '—'}</td>
               <td>
@@ -54,33 +70,66 @@ async function renderUsers(c) {
                     ? `<button class="btn btn-sm btn-secondary btn-icon" title="Bloklash" onclick="setUserStatus(${u.id},'blocked')"><i class="ti ti-user-x"></i></button>` : ''}
                   ${u.status === 'blocked'
                     ? `<button class="btn btn-sm btn-secondary" onclick="setUserStatus(${u.id},'active')"><i class="ti ti-user-check"></i>Faollashtirish</button>` : ''}
-                  <button class="btn btn-sm btn-secondary btn-icon" title="Parolni almashtirish" onclick="openResetUserPass(${u.id})"><i class="ti ti-key"></i></button>
-                  ${u.id !== currentUser.id
-                    ? `<button class="btn btn-sm btn-secondary btn-icon" title="Rolni almashtirish" onclick="toggleUserRole(${u.id})"><i class="ti ti-shield"></i></button>
-                       <button class="btn btn-sm btn-danger btn-icon" title="Oʻchirish" onclick="delUser(${u.id})"><i class="ti ti-trash"></i></button>` : ''}
+                  ${u.id !== currentUser.id ? `
+                    <button class="btn btn-sm btn-secondary btn-icon" title="Rol va filial" onclick="openUserRoleModal(${u.id})"><i class="ti ti-shield"></i></button>
+                    <button class="btn btn-sm btn-secondary btn-icon" title="Parolni almashtirish" onclick="openResetUserPass(${u.id})"><i class="ti ti-key"></i></button>
+                    <button class="btn btn-sm btn-danger btn-icon" title="Oʻchirish" onclick="delUser(${u.id})"><i class="ti ti-trash"></i></button>` : ''}
                 </div>
               </td>
             </tr>`).join('')}
         </tbody>
       </table></div>
     </div>`;
+  paintIcons(c);
+}
+
+function openUserRoleModal(id) {
+  const u = users.find(x => x.id == id); if (!u) return;
+  const brOpts = `<option value="">— Filial belgilanmagan —</option>` +
+    branches.map(b => `<option value="${b.id}" ${b.id == u.branch_id ? 'selected' : ''}>${esc(b.name)}</option>`).join('');
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">Rol va filial — @${esc(u.username)}</div>
+      <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Rol</label>
+        <select class="form-control" id="ur-role">
+          <option value="admin"   ${u.role==='admin'   ? 'selected':''}>Administrator — barcha ma'lumotlar, to'liq nazorat</option>
+          <option value="branch"  ${u.role==='branch'  ? 'selected':''}>Filial omborchisi — faqat o'z filiali, yozish huquqi</option>
+          <option value="viewer"  ${u.role==='viewer'  ? 'selected':''}>Kuzatuvchi — barcha ma'lumotlar, faqat ko'rish</option>
+          <option value="user"    ${u.role==='user'||u.role==='' ? 'selected':''}>Oddiy foydalanuvchi — ko'rish huquqi</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Filial (filial omborchisi uchun)</label>
+        <select class="form-control" id="ur-branch">${brOpts}</select>
+      </div>
+      <div style="font-size:12px;color:#64748b;padding:8px;background:#f8fafc;border-radius:8px;margin-bottom:4px">
+        <b>Filial omborchisi</b>: faqat belgilangan filial ombori, sotib olishlari va rasxodlarini ko'radi va tahrirlaydi.
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
+        <button class="btn btn-primary" onclick="saveUserRole(${id})"><i class="ti ti-check"></i>Saqlash</button>
+      </div>
+    </div>`);
+}
+
+async function saveUserRole(id) {
+  const role     = document.getElementById('ur-role').value;
+  const branchId = document.getElementById('ur-branch').value;
+  try {
+    await api('PUT', `/api/users/${id}/role`, { role });
+    await api('PUT', `/api/users/${id}/branch`, { branch_id: branchId || null });
+    toast('Yangilandi');
+    closeModal(true);
+    renderSection('users');
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function setUserStatus(id, status) {
   try {
     await api('PUT', `/api/users/${id}/status`, { status });
     toast(status === 'active' ? 'Tasdiqlandi' : status === 'blocked' ? 'Bloklandi' : 'Yangilandi');
-    renderSection('users');
-  } catch (e) { toast(e.message, 'error'); }
-}
-
-async function toggleUserRole(id) {
-  const u = users.find(x => x.id == id); if (!u) return;
-  const role = u.role === 'admin' ? 'user' : 'admin';
-  if (!confirm(`"${u.username}" roli "${role === 'admin' ? 'Administrator' : 'Foydalanuvchi'}" qilinsinmi?`)) return;
-  try {
-    await api('PUT', `/api/users/${id}/role`, { role });
-    toast('Rol yangilandi');
     renderSection('users');
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -94,7 +143,7 @@ function openResetUserPass(id) {
     </div>
     <div class="modal-body">
       <p style="font-size:13px;color:#64748b;margin-bottom:14px">
-        <b>@${esc(u.username)}</b> uchun yangi parol o'rnating.
+        <b>@${esc(u.username)}</b> uchun yangi parol oʻrnating.
       </p>
       <div class="form-group"><label class="form-label">Yangi parol *</label>
         <input class="form-control" type="text" id="up-pass" placeholder="Yangi parol (kamida 4 belgi)"></div>

@@ -3,7 +3,23 @@ const cookieParser = require('cookie-parser');
 const bcrypt       = require('bcryptjs');
 const jwt          = require('jsonwebtoken');
 const path         = require('path');
+const fs           = require('fs');
+const multer       = require('multer');
 const { db, init } = require('./db');
+
+// Avatar upload konfiguratsiyasi
+const avatarStorage = multer.diskStorage({
+  destination: path.join(__dirname, 'public/uploads/avatars'),
+  filename: (req, file, cb) => cb(null, `u${req.user.id}_${Date.now()}${path.extname(file.originalname)}`)
+});
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Faqat rasm fayl qabul qilinadi'));
+  }
+});
 
 const app        = express();
 const JWT_SECRET = 'satashkent_jwt_2026';
@@ -30,6 +46,18 @@ function adminOnly(req, res, next) {
   if (req.user?.role !== 'admin')
     return res.status(403).json({ error: 'Bu amal uchun administrator huquqi kerak' });
   next();
+}
+
+// Admin yoki filial omborchisi yozish huquqi (o'z filiali uchun)
+function canWrite(req, res, next) {
+  if (req.user?.role === 'admin' || req.user?.role === 'branch') return next();
+  return res.status(403).json({ error: 'Bu amal uchun yozish huquqi kerak' });
+}
+
+// Branch user uchun filial ID ni olish (token va DB dan)
+async function getUserBranchId(userId) {
+  const u = await db.get2('SELECT branch_id FROM users WHERE id=?', [userId]);
+  return u?.branch_id || null;
 }
 
 function noCache(res) { res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate'); }
@@ -132,8 +160,27 @@ app.post('/api/auth/logout', (req, res) => { res.clearCookie('token'); res.json(
 
 app.get('/api/me', auth, async (req, res) => {
   try {
-    const u = await db.get2('SELECT id,username,role,email,phone,full_name,status,created_at FROM users WHERE id=?', [req.user.id]);
+    const u = await db.get2('SELECT id,username,role,email,phone,full_name,status,created_at,branch_id,avatar FROM users WHERE id=?', [req.user.id]);
     res.json(u || { id: req.user.id, username: req.user.username, role: req.user.role });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Avatar yuklash
+app.post('/api/profile/avatar', auth, (req, res, next) => avatarUpload.single('avatar')(req, res, err => {
+  if (err) return res.status(400).json({ error: err.message });
+  next();
+}), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Fayl kerak' });
+  try {
+    // Eski avatarni o'chirish
+    const old = await db.get2('SELECT avatar FROM users WHERE id=?', [req.user.id]);
+    if (old?.avatar) {
+      const oldPath = path.join(__dirname, 'public', old.avatar);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+    const avatarUrl = '/uploads/avatars/' + req.file.filename;
+    await db.run2('UPDATE users SET avatar=? WHERE id=?', [avatarUrl, req.user.id]);
+    res.json({ success: true, avatar: avatarUrl });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -160,7 +207,8 @@ app.put('/api/profile', auth, async (req, res) => {
 // ── Admin: foydalanuvchilarni boshqarish ──
 app.get('/api/users', auth, adminOnly, async (req, res) => {
   try {
-    res.json(await db.all2('SELECT id,username,role,email,phone,full_name,status,created_at FROM users ORDER BY id'));
+    res.json(await db.all2(`SELECT u.id,u.username,u.role,u.email,u.phone,u.full_name,u.status,u.created_at,u.branch_id,u.avatar,b.name as branch_name
+      FROM users u LEFT JOIN branches b ON u.branch_id=b.id ORDER BY u.id`));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // Holatni oʻzgartirish (tasdiqlash/bloklash)
@@ -175,10 +223,18 @@ app.put('/api/users/:id/status', auth, adminOnly, async (req, res) => {
 // Rolni oʻzgartirish
 app.put('/api/users/:id/role', auth, adminOnly, async (req, res) => {
   const { role } = req.body || {};
-  if (!['admin', 'user'].includes(role)) return res.status(400).json({ error: 'Notoʻgʻri rol' });
+  if (!['admin', 'branch', 'viewer', 'user'].includes(role)) return res.status(400).json({ error: 'Notoʻgʻri rol' });
   if (parseInt(req.params.id) === req.user.id) return res.status(400).json({ error: 'Oʻz rolingizni oʻzgartira olmaysiz' });
   try {
     await db.run2('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Foydalanuvchiga filial belgilash
+app.put('/api/users/:id/branch', auth, adminOnly, async (req, res) => {
+  const { branch_id } = req.body || {};
+  try {
+    await db.run2('UPDATE users SET branch_id=? WHERE id=?', [branch_id || null, req.params.id]);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -203,8 +259,13 @@ app.delete('/api/users/:id', auth, adminOnly, async (req, res) => {
 
 // Branches
 app.get('/api/branches', auth, async (req, res) => {
-  try { res.json(await db.all2('SELECT * FROM branches ORDER BY id')); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    if (req.user.role === 'branch') {
+      const brId = await getUserBranchId(req.user.id);
+      if (brId) return res.json(await db.all2('SELECT * FROM branches WHERE id=?', [brId]));
+    }
+    res.json(await db.all2('SELECT * FROM branches ORDER BY id'));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post('/api/branches', auth, adminOnly, async (req, res) => {
   const { name, address, manager, phone } = req.body;
@@ -232,10 +293,15 @@ app.get('/api/products', auth, async (req, res) => {
   const params = [];
   if (req.query.branch_id) { sql += ' AND p.branch_id=?'; params.push(req.query.branch_id); }
   if (req.query.category)  { sql += ' AND p.category=?';  params.push(req.query.category); }
+  // Filial omborchisi faqat o'z filialini ko'radi
+  if (req.user.role === 'branch') {
+    const brId = await getUserBranchId(req.user.id);
+    if (brId) { sql += ' AND p.branch_id=?'; params.push(brId); }
+  }
   try { res.json(await db.all2(sql + ' ORDER BY p.id', params)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.post('/api/products', auth, adminOnly, async (req, res) => {
+app.post('/api/products', auth, canWrite, async (req, res) => {
   const { branch_id, name, category, unit, daily_usage, current_stock, min_stock, note } = req.body;
   if (!name) return res.status(400).json({ error: 'Nomi kerak' });
   try {
@@ -246,7 +312,7 @@ app.post('/api/products', auth, adminOnly, async (req, res) => {
     res.status(201).json(await db.get2('SELECT p.*,b.name as branch_name FROM products p LEFT JOIN branches b ON p.branch_id=b.id WHERE p.id=?', [r.lastID]));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.put('/api/products/:id', auth, adminOnly, async (req, res) => {
+app.put('/api/products/:id', auth, canWrite, async (req, res) => {
   const { branch_id, name, category, unit, daily_usage, current_stock, min_stock, note } = req.body;
   try {
     await db.run2('UPDATE products SET branch_id=?,name=?,category=?,unit=?,daily_usage=?,current_stock=?,min_stock=?,note=? WHERE id=?',
@@ -272,10 +338,14 @@ app.get('/api/purchases', auth, async (req, res) => {
   if (req.query.branch_id)  { sql += ' AND b.id=?'; params.push(req.query.branch_id); }
   if (req.query.date_from)  { sql += ' AND pu.purchase_date>=?'; params.push(req.query.date_from); }
   if (req.query.date_to)    { sql += ' AND pu.purchase_date<=?'; params.push(req.query.date_to); }
+  if (req.user.role === 'branch') {
+    const brId = await getUserBranchId(req.user.id);
+    if (brId) { sql += ' AND b.id=?'; params.push(brId); }
+  }
   try { res.json(await db.all2(sql + ' ORDER BY pu.purchase_date DESC,pu.id DESC', params)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.post('/api/purchases', auth, adminOnly, async (req, res) => {
+app.post('/api/purchases', auth, canWrite, async (req, res) => {
   const { product_id, quantity, unit_price, purchase_date, supplier, note } = req.body;
   if (!product_id || !quantity) return res.status(400).json({ error: 'Mahsulot va miqdor kerak' });
   try {
@@ -290,7 +360,7 @@ app.post('/api/purchases', auth, adminOnly, async (req, res) => {
     ));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.put('/api/purchases/:id', auth, adminOnly, async (req, res) => {
+app.put('/api/purchases/:id', auth, canWrite, async (req, res) => {
   const { product_id, quantity, unit_price, purchase_date, supplier, note } = req.body;
   try {
     const old = await db.get2('SELECT * FROM purchases WHERE id=?', [req.params.id]);
@@ -305,7 +375,7 @@ app.put('/api/purchases/:id', auth, adminOnly, async (req, res) => {
     ));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.delete('/api/purchases/:id', auth, adminOnly, async (req, res) => {
+app.delete('/api/purchases/:id', auth, canWrite, async (req, res) => {
   try {
     const p = await db.get2('SELECT * FROM purchases WHERE id=?', [req.params.id]);
     if (p) await db.run2('UPDATE products SET current_stock=current_stock-? WHERE id=?', [p.quantity, p.product_id]);
@@ -328,10 +398,14 @@ app.get('/api/consumptions', auth, async (req, res) => {
   if (req.query.to_branch_id) { sql += ' AND co.to_branch_id=?'; params.push(req.query.to_branch_id); }
   if (req.query.date_from)    { sql += ' AND co.consume_date>=?'; params.push(req.query.date_from); }
   if (req.query.date_to)      { sql += ' AND co.consume_date<=?'; params.push(req.query.date_to); }
+  if (req.user.role === 'branch') {
+    const brId = await getUserBranchId(req.user.id);
+    if (brId) { sql += ' AND (co.from_branch_id=? OR co.to_branch_id=?)'; params.push(brId, brId); }
+  }
   try { res.json(await db.all2(sql + ' ORDER BY co.consume_date DESC, co.id DESC', params)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.post('/api/consumptions', auth, adminOnly, async (req, res) => {
+app.post('/api/consumptions', auth, canWrite, async (req, res) => {
   const { product_id, quantity, to_branch_id, consume_date, note } = req.body;
   if (!product_id || !quantity) return res.status(400).json({ error: 'Mahsulot va miqdor kerak' });
   try {
@@ -347,7 +421,7 @@ app.post('/api/consumptions', auth, adminOnly, async (req, res) => {
     res.status(201).json(await db.get2(CONS_SELECT + ' WHERE co.id=?', [r.lastID]));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.delete('/api/consumptions/:id', auth, adminOnly, async (req, res) => {
+app.delete('/api/consumptions/:id', auth, canWrite, async (req, res) => {
   try {
     const c = await db.get2('SELECT * FROM consumptions WHERE id=?', [req.params.id]);
     if (c) await db.run2('UPDATE products SET current_stock=current_stock+? WHERE id=?', [c.quantity, c.product_id]);

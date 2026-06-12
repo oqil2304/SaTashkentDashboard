@@ -10,5 +10,5 @@ let categories = [];
 let currentUser = null;
 let users = [];
 
-// Joriy foydalanuvchi admin-mi?
-function isAdmin() { return currentUser && currentUser.role === 'admin'; }
+function isAdmin()  { return currentUser?.role === 'admin'; }
+function isWriter() { return currentUser?.role === 'admin' || currentUser?.role === 'branch'; }

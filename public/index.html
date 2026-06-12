@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'" />
   <link rel="icon" href="https://satashkent.uz/images/logo.jpg" type="image/jpeg" />
-  <link rel="stylesheet" href="/style.css?v=14" />
+  <link rel="stylesheet" href="/style.css?v=15" />
 </head>
 <body>
   <!-- Sidebar -->
@@ -55,18 +55,14 @@
         <i class="ti ti-users nav-icon"></i>
         <span>Foydalanuvchilar</span>
       </a>
-      <a class="nav-item" data-section="profile" href="#">
-        <i class="ti ti-settings nav-icon"></i>
-        <span>Shaxsiy kabinet</span>
-      </a>
     </nav>
 
     <div class="sidebar-footer">
-      <div class="sidebar-user">
+      <div class="sidebar-user" id="sidebar-user-btn" title="Shaxsiy kabinet" style="cursor:pointer;flex:1" onclick="navigate('profile')">
         <div class="sidebar-avatar" id="user-avatar">A</div>
         <div class="sidebar-user-info">
           <div class="sidebar-username" id="sidebar-username">Admin</div>
-          <div class="sidebar-role">Administrator</div>
+          <div class="sidebar-role" id="sidebar-role">Administrator</div>
         </div>
       </div>
       <button class="btn-logout" id="logout-btn" title="Chiqish">
@@ -107,20 +103,20 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Modullar — yuklash tartibi muhim -->
-  <script src="/js/state.js?v=14"></script>
-  <script src="/js/icons.js?v=14"></script>
-  <script src="/js/api.js?v=14"></script>
-  <script src="/js/helpers.js?v=14"></script>
-  <script src="/js/ui.js?v=14"></script>
-  <script src="/js/tablesort.js?v=14"></script>
-  <script src="/js/overview.js?v=14"></script>
-  <script src="/js/products.js?v=14"></script>
-  <script src="/js/purchases.js?v=14"></script>
-  <script src="/js/consumptions.js?v=14"></script>
-  <script src="/js/branches.js?v=14"></script>
-  <script src="/js/report.js?v=14"></script>
-  <script src="/js/users.js?v=14"></script>
-  <script src="/js/profile.js?v=14"></script>
-  <script src="/js/main.js?v=14"></script>
+  <script src="/js/state.js?v=15"></script>
+  <script src="/js/icons.js?v=15"></script>
+  <script src="/js/api.js?v=15"></script>
+  <script src="/js/helpers.js?v=15"></script>
+  <script src="/js/ui.js?v=15"></script>
+  <script src="/js/tablesort.js?v=15"></script>
+  <script src="/js/overview.js?v=15"></script>
+  <script src="/js/products.js?v=15"></script>
+  <script src="/js/purchases.js?v=15"></script>
+  <script src="/js/consumptions.js?v=15"></script>
+  <script src="/js/branches.js?v=15"></script>
+  <script src="/js/report.js?v=15"></script>
+  <script src="/js/users.js?v=15"></script>
+  <script src="/js/profile.js?v=15"></script>
+  <script src="/js/main.js?v=15"></script>
 </body>
 </html>

@@ -105,8 +105,8 @@ function openFinishedDetail() {
       <td style="color:#64748b">${p.daily_usage} ${esc(p.unit)}/kun</td>
       <td>${statusBadge(d)}</td>
       <td style="display:flex;gap:6px;align-items:center">
-        ${isAdmin() ? `<button class="btn btn-sm btn-primary" onclick="openAddPurchase(${p.id})"><i class="ti ti-shopping-cart"></i>Sotib olish</button>` : ''}
-        ${isAdmin() ? `<button class="btn btn-sm btn-danger btn-icon" title="Mahsulotni o'chirish" onclick="delFinishedProduct(${p.id},this)"><i class="ti ti-x"></i></button>` : ''}
+        ${isWriter() ? `<button class="btn btn-sm btn-primary" onclick="openAddPurchase(${p.id})"><i class="ti ti-shopping-cart"></i>Sotib olish</button>` : ''}
+        ${isWriter() ? `<button class="btn btn-sm btn-danger btn-icon" title="Mahsulotni o'chirish" onclick="delFinishedProduct(${p.id},this)"><i class="ti ti-x"></i></button>` : ''}
       </td>
     </tr>`;
   }).join('') : `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-mood-happy"></i><p>Tugagan mahsulot yoʻq</p></div></td></tr>`;
@@ -168,7 +168,7 @@ function productRows(list) {
       <td style="font-weight:700;color:${daysColor(d)}">${isFinite(d) ? d.toFixed(1) + ' kun' : '—'}</td>
       <td>${statusBadge(d)}</td>
       <td>
-        ${isAdmin() ? `<button class="btn btn-sm btn-primary" onclick="openAddPurchase(${p.id})">
+        ${isWriter() ? `<button class="btn btn-sm btn-primary" onclick="openAddPurchase(${p.id})">
           <i class="ti ti-shopping-cart"></i>Sotib olish
         </button>` : ''}
       </td>
