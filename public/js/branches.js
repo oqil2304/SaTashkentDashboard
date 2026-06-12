@@ -61,12 +61,13 @@ function renderBranches(c) {
 function openBranchDetail(id) {
   const b = branches.find(x => x.id == id);
   if (!b) return;
+  const c = document.getElementById('content');
   const bProds = products.filter(p => p.branch_id == b.id);
-  const totSpend = purchases
-    .filter(p => p.branch_id == b.id)
-    .reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
+  const bPurch = purchases.filter(p => p.branch_id == b.id)
+    .sort((a, b2) => (b2.purchase_date || '').localeCompare(a.purchase_date || ''));
+  const totSpend = bPurch.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
 
-  const rows = bProds.length ? bProds.map(p => {
+  const prodRows = bProds.length ? bProds.map(p => {
     const d = daysLeft(p.current_stock, p.daily_usage);
     return `<tr>
       <td style="font-weight:600">${esc(p.name)}</td>
@@ -75,45 +76,66 @@ function openBranchDetail(id) {
       <td style="color:#64748b">${p.daily_usage} ${esc(p.unit)}/kun</td>
       <td style="font-weight:700;color:${daysColor(d)}">${isFinite(d) && d < 999 ? d.toFixed(1) + ' kun' : '—'}</td>
       <td>${statusBadge(d)}</td>
-      ${isAdmin() ? `<td>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-sm btn-secondary btn-icon" onclick="openEditProduct(${p.id})" title="Tahrirlash"><i class="ti ti-edit"></i></button>
-          <button class="btn btn-sm btn-primary" onclick="openAddPurchase(${p.id})"><i class="ti ti-shopping-cart"></i>Sotib olish</button>
-        </div>
-      </td>` : '<td></td>'}
     </tr>`;
-  }).join('') : `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-box"></i><p>Bu filialda mahsulot yo'q</p></div></td></tr>`;
+  }).join('') : `<tr><td colspan="6"><div class="empty-state"><i class="ti ti-box"></i><p>Bu filialda mahsulot yo'q</p></div></td></tr>`;
 
-  openModal(`
-    <div class="modal-header">
+  const purchRows = bPurch.length ? bPurch.map(p => `<tr>
+      <td style="color:#64748b">${esc(p.purchase_date || '—')}</td>
+      <td style="font-weight:600">${esc(p.product_name || '—')}</td>
+      <td>${p.quantity} ${esc(p.unit || '')}</td>
+      <td>${fmtMoney(p.unit_price)}</td>
+      <td style="font-weight:700;color:var(--teal)">${fmtMoney((p.quantity||0)*(p.unit_price||0))}</td>
+      <td style="color:#64748b">${esc(p.supplier || '—')}</td>
+    </tr>`).join('') : `<tr><td colspan="6"><div class="empty-state"><i class="ti ti-shopping-cart-off"></i><p>Bu filialda sotib olish yo'q</p></div></td></tr>`;
+
+  c.innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+      <button class="btn btn-secondary btn-icon" onclick="navigate('branches')" title="Orqaga"><i class="ti ti-arrow-left"></i></button>
       <div>
-        <div class="modal-title">${esc(b.name)}</div>
-        <div style="font-size:12px;color:#94a3b8;margin-top:2px">${esc(b.address || '')}</div>
+        <div class="section-title" style="margin:0">${esc(b.name)}</div>
+        <div style="font-size:13px;color:#94a3b8">${esc(b.address || '')}</div>
       </div>
-      <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button>
     </div>
-    <div class="modal-body" style="padding:0">
-      <div style="display:flex;gap:24px;padding:14px 20px;background:#f8f9fb;border-bottom:1px solid var(--border);flex-wrap:wrap">
-        ${b.manager ? `<div style="font-size:13px;display:flex;align-items:center;gap:6px"><i class="ti ti-user" style="color:var(--teal)"></i>${esc(b.manager)}</div>` : ''}
-        ${b.phone   ? `<div style="font-size:13px;display:flex;align-items:center;gap:6px"><i class="ti ti-phone" style="color:var(--teal)"></i>${esc(b.phone)}</div>`   : ''}
-        <div style="font-size:13px;display:flex;align-items:center;gap:6px"><i class="ti ti-box" style="color:var(--teal)"></i>${bProds.length} ta mahsulot</div>
-        <div style="font-size:13px;display:flex;align-items:center;gap:6px"><i class="ti ti-coin" style="color:var(--teal)"></i>${fmtMoney(totSpend)} jami xarajat</div>
+
+    <div class="stats-grid" style="margin-bottom:18px">
+      <div class="stat-card">
+        <div class="stat-icon teal"><i class="ti ti-box"></i></div>
+        <div><div class="stat-label">Mahsulot turi</div><div class="stat-value">${bProds.length}</div></div>
       </div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="background:#f8f9fb">
-            <th style="padding:10px 16px;text-align:left;font-size:12px;color:#64748b;font-weight:600;border-bottom:1px solid var(--border)">Mahsulot</th>
-            <th style="padding:10px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600;border-bottom:1px solid var(--border)">Kategoriya</th>
-            <th style="padding:10px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600;border-bottom:1px solid var(--border)">Omborda</th>
-            <th style="padding:10px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600;border-bottom:1px solid var(--border)">Kunlik</th>
-            <th style="padding:10px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600;border-bottom:1px solid var(--border)">Qolgan kun</th>
-            <th style="padding:10px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600;border-bottom:1px solid var(--border)">Holat</th>
-            <th style="padding:10px 12px;border-bottom:1px solid var(--border)"></th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+      <div class="stat-card">
+        <div class="stat-icon amber"><i class="ti ti-shopping-cart"></i></div>
+        <div><div class="stat-label">Sotib olishlar</div><div class="stat-value">${bPurch.length}</div></div>
       </div>
-    </div>`, true);
+      <div class="stat-card">
+        <div class="stat-icon blue"><i class="ti ti-coin"></i></div>
+        <div><div class="stat-label">Jami xarajat</div><div class="stat-value" style="font-size:18px">${fmtMoney(totSpend)}</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon red"><i class="ti ti-user"></i></div>
+        <div><div class="stat-label">Mas'ul shaxs</div>
+          <div class="stat-value" style="font-size:15px">${esc(b.manager || '—')}</div>
+          ${b.phone ? `<div style="font-size:12px;color:#94a3b8">${esc(b.phone)}</div>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px">
+      <i class="ti ti-box" style="color:#94a3b8;margin-right:6px"></i>Filialdagi mahsulotlar
+    </div>
+    <div class="card" style="margin-bottom:22px"><div class="table-wrap"><table>
+      <thead><tr><th>Mahsulot</th><th>Kategoriya</th><th>Omborda</th><th>Kunlik sarflanish</th><th>Qolgan kun</th><th>Holat</th></tr></thead>
+      <tbody>${prodRows}</tbody>
+    </table></div></div>
+
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px">
+      <i class="ti ti-coin" style="color:#94a3b8;margin-right:6px"></i>Filial xarajatlari (sotib olishlar tarixi)
+    </div>
+    <div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>Sana</th><th>Mahsulot</th><th>Miqdor</th><th>Narx</th><th>Jami</th><th>Yetkazuvchi</th></tr></thead>
+      <tbody>${purchRows}</tbody>
+    </table></div></div>`;
+
+  paintIcons(c);
 }
 
 
