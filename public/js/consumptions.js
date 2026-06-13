@@ -53,7 +53,7 @@ function applyConsumptionFilter() {
       <td><span class="badge badge-gray">${esc(co.from_branch_name || '—')}</span></td>
       <td><span class="badge ${cross ? 'badge-amber' : 'badge-blue'}">${esc(co.to_branch_name || '—')}${cross ? ' ⇄' : ''}</span></td>
       <td style="font-weight:700;color:var(--red)">−${co.quantity} ${esc(co.unit || '')}</td>
-      <td style="color:#64748b">${esc(co.note || '—')}</td>
+      <td style="color:#64748b">${co.note === 'auto_daily' ? '<span style="color:#0d9488;font-weight:500">Kunlik sarf</span>' : esc(co.note || '—')}</td>
       <td style="white-space:nowrap;text-align:right">
         <button class="btn btn-sm btn-danger btn-icon" onclick="delConsumption(${co.id})" title="Bekor qilish"><i class="ti ti-trash"></i></button>
       </td>

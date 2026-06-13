@@ -46,10 +46,10 @@ function applyReport() {
 
   // Rasxodlar bo'yicha filial statistikasi (from_branch_id bo'yicha)
   const consStats = branches.map(b => {
-    const bCons = monthConsumptions.filter(co => co.from_branch_id == b.id);
-    const qty   = bCons.reduce((s, co) => s + (co.quantity || 0), 0);
-    return { ...b, cons_count: bCons.length, total_qty: qty };
-  }).sort((a, b) => b.cons_count - a.cons_count);
+    const bCons    = monthConsumptions.filter(co => co.from_branch_id == b.id);
+    const total_cost = bCons.reduce((s, co) => s + (co.quantity || 0) * (co.unit_price || 0), 0);
+    return { ...b, cons_count: bCons.length, total_cost };
+  }).sort((a, b) => b.total_cost - a.total_cost);
 
   body.innerHTML = `
     <div class="stats-grid" style="margin-bottom:16px">
@@ -107,14 +107,15 @@ function applyReport() {
     </div>
     <div class="card">
       <div class="table-wrap"><table>
-        <thead><tr><th>Filial (ombor)</th><th>Rasxodlar soni</th><th>Jami miqdor</th><th>Ulush</th></tr></thead>
+        <thead><tr><th>Filial (ombor)</th><th>Rasxodlar soni</th><th>Jami narx</th><th>Ulush</th></tr></thead>
         <tbody>
           ${consStats.map(b => {
-            const pct = totalCons > 0 ? (b.cons_count / totalCons * 100).toFixed(1) : 0;
+            const totalAllCost = consStats.reduce((s, x) => s + x.total_cost, 0);
+            const pct = totalAllCost > 0 ? (b.total_cost / totalAllCost * 100).toFixed(1) : 0;
             return `<tr style="cursor:pointer" onclick="openReportConsDetail(${b.id})">
               <td style="font-weight:600">${esc(b.name)}</td>
               <td>${b.cons_count}</td>
-              <td style="font-weight:700;color:var(--red)">${b.total_qty > 0 ? '−' + b.total_qty : '—'}</td>
+              <td style="font-weight:700;color:var(--red)">${b.total_cost > 0 ? fmtMoney(b.total_cost) : '—'}</td>
               <td><div style="display:flex;align-items:center;gap:8px">
                 <div style="flex:1;height:6px;background:#f1f5f9;border-radius:3px;min-width:60px">
                   <div style="height:100%;background:var(--red);border-radius:3px;width:${pct}%"></div>
