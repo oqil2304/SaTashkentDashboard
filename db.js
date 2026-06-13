@@ -48,7 +48,8 @@ async function init() {
   sqlDb.run(`CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)`);
   sqlDb.run(`CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, branch_id INTEGER, name TEXT NOT NULL, category TEXT, unit TEXT, daily_usage REAL DEFAULT 1, current_stock REAL DEFAULT 0, min_stock REAL DEFAULT 0, note TEXT)`);
   sqlDb.run(`CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, unit_price REAL, purchase_date TEXT, supplier TEXT, note TEXT, created_at TEXT DEFAULT (datetime('now')))`);
-  sqlDb.run(`CREATE TABLE IF NOT EXISTS consumptions (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, from_branch_id INTEGER, to_branch_id INTEGER, consume_date TEXT, note TEXT, created_at TEXT DEFAULT (datetime('now')))`);
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS consumptions (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, from_branch_id INTEGER, to_branch_id INTEGER, consume_date TEXT, note TEXT, unit_price REAL DEFAULT 0, created_at TEXT DEFAULT (datetime('now')))`);
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
 
   // ── users jadvalini yangilash (eski bazada yangi ustunlar boʻlmasligi mumkin) ──
   ensureColumn('users', 'email', 'TEXT');
@@ -60,6 +61,7 @@ async function init() {
   ensureColumn('users', 'reset_expires', 'INTEGER');
   ensureColumn('users', 'branch_id', 'INTEGER');
   ensureColumn('users', 'avatar', 'TEXT');
+  ensureColumn('consumptions', 'unit_price', 'REAL DEFAULT 0');
   // Eski adminlar 'active' boʻlib qolsin
   sqlDb.run("UPDATE users SET status='active' WHERE status IS NULL OR status=''");
 

@@ -386,7 +386,8 @@ app.delete('/api/purchases/:id', auth, canWrite, async (req, res) => {
 
 // Consumptions (Rasxod — ombordan chiqim)
 const CONS_SELECT = `SELECT co.*, pr.name as product_name, pr.unit,
-    fb.name as from_branch_name, tb.name as to_branch_name
+    fb.name as from_branch_name, tb.name as to_branch_name,
+    co.unit_price as unit_price
   FROM consumptions co
   LEFT JOIN products pr ON co.product_id=pr.id
   LEFT JOIN branches fb ON co.from_branch_id=fb.id
@@ -483,9 +484,77 @@ app.get('/api/report', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-init().then(() => {
+init().then(async () => {
+  // Kunlik sarf tizimini ishga tushirish (server start bo'lganda)
+  await catchUpDailyConsumptions();
+  scheduleDailyConsumption();
   app.listen(PORT, () => {
     console.log(`🚀 SaTashkent Dashboard → http://localhost:${PORT}`);
     console.log('   Login: admin / admin123');
   });
 }).catch(e => { console.error('DB init xatosi:', e); process.exit(1); });
+
+// ── Kunlik sarf: bir kun uchun barcha mahsulotlarni rasxod qilish ──────────────
+async function runDailyConsumption(dateStr) {
+  // Bu kun allaqachon ishlanganmi?
+  const exists = await db.get2(
+    "SELECT id FROM consumptions WHERE consume_date=? AND note='auto_daily' LIMIT 1",
+    [dateStr]
+  );
+  if (exists) return false; // allaqachon ishlangan
+
+  const prods = await db.all2(
+    'SELECT p.*, (SELECT unit_price FROM purchases WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as last_price FROM products p WHERE p.daily_usage > 0'
+  );
+  for (const p of prods) {
+    const qty = Math.min(Number(p.daily_usage), Number(p.current_stock));
+    if (qty <= 0) continue;
+    await db.run2(
+      'INSERT INTO consumptions (product_id,quantity,from_branch_id,to_branch_id,consume_date,note,unit_price) VALUES (?,?,?,?,?,?,?)',
+      [p.id, qty, p.branch_id, p.branch_id, dateStr, 'auto_daily', p.last_price || 0]
+    );
+    await db.run2('UPDATE products SET current_stock=current_stock-? WHERE id=?', [qty, p.id]);
+  }
+  console.log(`✅ Kunlik sarf ${dateStr}: ${prods.filter(p=>p.daily_usage>0).length} ta mahsulot`);
+  return true;
+}
+
+// O'tkazib yuborilgan kunlarni to'ldirish (max 30 kun)
+async function catchUpDailyConsumptions() {
+  const setting = await db.get2("SELECT value FROM settings WHERE key='last_daily_run'");
+  const lastRun = setting ? new Date(setting.value) : null;
+  const today   = new Date(); today.setHours(0,0,0,0);
+
+  if (!lastRun) {
+    // Birinchi marta — faqat bugundan boshlash
+    const todayStr = today.toISOString().split('T')[0];
+    await db.run2("INSERT OR REPLACE INTO settings (key,value) VALUES ('last_daily_run',?)", [todayStr]);
+    return;
+  }
+
+  const cursor = new Date(lastRun); cursor.setDate(cursor.getDate() + 1); cursor.setHours(0,0,0,0);
+  let days = 0;
+  while (cursor <= today && days < 30) {
+    const dateStr = cursor.toISOString().split('T')[0];
+    await runDailyConsumption(dateStr);
+    await db.run2("INSERT OR REPLACE INTO settings (key,value) VALUES ('last_daily_run',?)", [dateStr]);
+    cursor.setDate(cursor.getDate() + 1);
+    days++;
+  }
+}
+
+// Har kun yarim tunda yangi kunlik sarf
+function scheduleDailyConsumption() {
+  function msUntilMidnight() {
+    const now = new Date(), midnight = new Date(now);
+    midnight.setDate(midnight.getDate() + 1);
+    midnight.setHours(0, 0, 30, 0); // 00:00:30
+    return midnight - now;
+  }
+  setTimeout(async function tick() {
+    const todayStr = new Date().toISOString().split('T')[0];
+    await runDailyConsumption(todayStr);
+    await db.run2("INSERT OR REPLACE INTO settings (key,value) VALUES ('last_daily_run',?)", [todayStr]);
+    setTimeout(tick, msUntilMidnight());
+  }, msUntilMidnight());
+}

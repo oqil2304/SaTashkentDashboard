@@ -175,56 +175,33 @@ function openReportConsDetail(branchId) {
   const ym    = `${year}-${String(month).padStart(2, '0')}`;
   const UZ_MONTHS = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
 
-  const branch  = branches.find(b => b.id == branchId);
-  const bName   = branch ? branch.name : '—';
-  const mLabel  = `${UZ_MONTHS[month - 1]} ${year}`;
-  const daysInMonth = new Date(year, month, 0).getDate();
+  const branch = branches.find(b => b.id == branchId);
+  const bName  = branch ? branch.name : '—';
+  const mLabel = `${UZ_MONTHS[month - 1]} ${year}`;
 
-  // Qo'lda kiritilgan rasxodlar
-  const manualList = consumptions.filter(co =>
+  const list = consumptions.filter(co =>
     co.from_branch_id == branchId && (co.consume_date || '').startsWith(ym)
   );
+  const totalQty   = list.reduce((s, co) => s + (co.quantity || 0), 0);
+  const totalCost  = list.reduce((s, co) => s + (co.quantity || 0) * (co.unit_price || 0), 0);
+  const autoCount  = list.filter(co => co.note === 'auto_daily').length;
 
-  // Kunlik sarf hisoblangan yozuvlar (daily_usage > 0 bo'lgan mahsulotlar)
-  const dailyList = products
-    .filter(p => p.branch_id == branchId && p.daily_usage > 0)
-    .map(p => ({
-      _type:       'daily',
-      consume_date: ym,
-      product_name: p.name,
-      to_branch_name: bName,
-      from_branch_id: branchId,
-      to_branch_id:   branchId,
-      quantity:     +(p.daily_usage * daysInMonth).toFixed(2),
-      unit:         p.unit || '',
-      note:         `Kunlik sarf × ${daysInMonth} kun`
-    }));
-
-  // Birlashtirilgan ro'yxat: avval qo'lda, keyin kunlik
-  const allRows = [
-    ...manualList.map(co => {
-      const cross = co.from_branch_id != co.to_branch_id;
-      return `<tr>
-        <td style="color:#64748b">${esc(co.consume_date)}</td>
-        <td style="font-weight:600">${esc(co.product_name || '—')}</td>
-        <td><span class="badge ${cross ? 'badge-amber' : 'badge-blue'}">${esc(co.to_branch_name || '—')}${cross ? ' ⇄' : ''}</span></td>
-        <td style="font-weight:700;color:var(--red)">−${co.quantity} ${esc(co.unit || '')}</td>
-        <td style="color:#64748b">${esc(co.note || '—')}</td>
-      </tr>`;
-    }),
-    ...dailyList.map(d => `<tr style="background:#fafafa">
-        <td style="color:#64748b">${esc(d.consume_date)}</td>
-        <td style="font-weight:600">${esc(d.product_name)}</td>
-        <td><span class="badge badge-gray">${esc(d.to_branch_name)}</span></td>
-        <td style="font-weight:700;color:var(--amber)">~${d.quantity} ${esc(d.unit)}</td>
-        <td style="color:#64748b;font-size:11px">${esc(d.note)}</td>
-      </tr>`)
-  ];
-
-  const totalCount = manualList.length + dailyList.length;
-  const rows = allRows.length
-    ? allRows.join('')
-    : `<tr><td colspan="5"><div class="empty-state"><i class="ti ti-package-export"></i><p>Bu oyda rasxod yo'q</p></div></td></tr>`;
+  const rows = list.length
+    ? list.map(co => {
+        const cross    = co.from_branch_id != co.to_branch_id;
+        const isAuto   = co.note === 'auto_daily';
+        const noteText = isAuto ? 'Kunlik sarf' : (co.note || '—');
+        return `<tr${isAuto ? ' style="background:#fafff9"' : ''}>
+          <td style="color:#64748b">${esc(co.consume_date)}</td>
+          <td style="font-weight:600">${esc(co.product_name || '—')}</td>
+          <td><span class="badge ${cross ? 'badge-amber' : 'badge-blue'}">${esc(co.to_branch_name || '—')}${cross ? ' ⇄' : ''}</span></td>
+          <td style="font-weight:700;color:var(--red)">−${co.quantity} ${esc(co.unit || '')}</td>
+          <td>${co.unit_price > 0 ? fmtMoney(co.unit_price) : '—'}</td>
+          <td style="font-weight:600;color:var(--red)">${co.unit_price > 0 ? fmtMoney((co.quantity||0)*(co.unit_price||0)) : '—'}</td>
+          <td style="color:#64748b;font-size:12px">${isAuto ? `<span class="badge badge-teal">${noteText}</span>` : esc(noteText)}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-package-export"></i><p>Bu oyda rasxod yo'q</p></div></td></tr>`;
 
   const c = document.getElementById('content');
   c.innerHTML = `
@@ -232,14 +209,17 @@ function openReportConsDetail(branchId) {
       <button class="btn btn-secondary btn-icon" onclick="navigate('report')" title="Orqaga"><i class="ti ti-arrow-left"></i></button>
       <div>
         <div class="section-title" style="margin:0"><i class="ti ti-building-store" style="color:var(--teal);margin-right:6px"></i>${esc(bName)}</div>
-        <div style="font-size:13px;color:#94a3b8">${mLabel} — rasxodlar · ${totalCount} ta yozuv
-          ${dailyList.length ? `<span style="margin-left:8px;color:#f59e0b">· ${dailyList.length} ta kunlik sarf (hisoblangan)</span>` : ''}
+        <div style="font-size:13px;color:#94a3b8">${mLabel} — rasxodlar · ${list.length} ta yozuv
+          ${autoCount ? `<span style="margin-left:8px;color:#16a34a">· ${autoCount} ta kunlik avtomatik sarf</span>` : ''}
         </div>
       </div>
     </div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>Sana</th><th>Mahsulot</th><th>Filial uchun</th><th>Miqdor</th><th>Izoh</th></tr></thead>
+      <thead><tr><th>Sana</th><th>Mahsulot</th><th>Filial uchun</th><th>Miqdor</th><th>Birlik narx</th><th>Jami</th><th>Izoh</th></tr></thead>
       <tbody>${rows}</tbody>
-    </table></div></div>`;
+    </table></div></div>
+    ${totalCost > 0 ? `<div style="text-align:right;padding:8px 20px;font-size:13px;color:#64748b">
+      Jami: <strong style="color:var(--teal);font-size:15px">${fmtMoney(totalCost)}</strong>
+    </div>` : ''}`;
   paintIcons(c);
 }
