@@ -29,12 +29,50 @@ function alertProducts() {
   return finishedProducts();
 }
 
+let _lastAlertCount = null; // oldingi ogohlantirishlar soni (ovoz uchun)
+
+// Qo'ng'iroq ovozi — Web Audio bilan (tashqi fayl kerak emas)
+function playBellSound() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    // Ikki tonli "ding-ding" jiringlash
+    [[880, 0], [1175, 0.16]].forEach(([freq, delay]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      osc.connect(gain); gain.connect(ctx.destination);
+      const t = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.25, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      osc.start(t);
+      osc.stop(t + 0.42);
+    });
+    setTimeout(() => ctx.close(), 1000);
+  } catch (_) {}
+}
+
 function updateAlertBadge() {
   const cnt = alertProducts().length;
   const badge = document.getElementById('alert-count');
   if (!badge) return;
   badge.textContent = cnt;
   badge.style.display = cnt > 0 ? 'flex' : 'none';
+  // Yangi ogohlantirish kelganda — qo'ng'iroqni jiringlatish va silkitish
+  if (_lastAlertCount !== null && cnt > _lastAlertCount) {
+    playBellSound();
+    const btn = document.getElementById('alert-btn');
+    if (btn) {
+      btn.classList.remove('ring');
+      void btn.offsetWidth;
+      btn.classList.add('ring');
+      setTimeout(() => btn.classList.remove('ring'), 900);
+    }
+  }
+  _lastAlertCount = cnt;
 }
 
 function renderOverview(c) {
