@@ -62,6 +62,11 @@ async function init() {
   ensureColumn('users', 'branch_id', 'INTEGER');
   ensureColumn('users', 'avatar', 'TEXT');
   ensureColumn('consumptions', 'unit_price', 'REAL DEFAULT 0');
+  ensureColumn('purchases', 'remaining_qty', 'REAL');
+  // Yangi ustun bo'sh bo'lsa — quantity bilan to'ldirish
+  sqlDb.run('UPDATE purchases SET remaining_qty = quantity WHERE remaining_qty IS NULL');
+  saveDb();
+  await fifoInitRemainingQty();
   // Eski adminlar 'active' boʻlib qolsin
   sqlDb.run("UPDATE users SET status='active' WHERE status IS NULL OR status=''");
 
@@ -216,6 +221,29 @@ async function seedMoreProducts() {
   }
 
   console.log(`✅ Qo'shimcha ${extraProducts.length} ta mahsulot va ${extraPurchases.length} ta xarid qo'shildi`);
+}
+
+// FIFO: har mahsulot uchun remaining_qty ni current_stock asosida hisoblash
+async function fifoInitRemainingQty() {
+  // Faqat birinchi marta yoki ma'lumotlar mos kelmasa ishlaydi
+  const prods = await db.all2('SELECT id, current_stock FROM products');
+  for (const p of prods) {
+    const batches = await db.all2(
+      'SELECT * FROM purchases WHERE product_id=? ORDER BY purchase_date ASC, id ASC', [p.id]
+    );
+    if (!batches.length) continue;
+    const totalPurchased = batches.reduce((s, b) => s + (b.quantity || 0), 0);
+    let consumed = totalPurchased - (p.current_stock || 0);
+    if (consumed < 0) consumed = 0;
+    for (const batch of batches) {
+      const take = Math.min(batch.quantity, consumed);
+      const rem  = +(batch.quantity - take).toFixed(4);
+      sqlDb.run('UPDATE purchases SET remaining_qty=? WHERE id=?', [rem, batch.id]);
+      consumed -= take;
+      if (consumed <= 0) break;
+    }
+  }
+  saveDb();
 }
 
 module.exports = { db, init };

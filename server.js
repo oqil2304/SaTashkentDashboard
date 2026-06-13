@@ -350,8 +350,8 @@ app.post('/api/purchases', auth, canWrite, async (req, res) => {
   if (!product_id || !quantity) return res.status(400).json({ error: 'Mahsulot va miqdor kerak' });
   try {
     const r = await db.run2(
-      'INSERT INTO purchases (product_id,quantity,unit_price,purchase_date,supplier,note) VALUES (?,?,?,?,?,?)',
-      [product_id, quantity, unit_price||0, purchase_date||new Date().toISOString().split('T')[0], supplier||'', note||'']
+      'INSERT INTO purchases (product_id,quantity,unit_price,purchase_date,supplier,note,remaining_qty) VALUES (?,?,?,?,?,?,?)',
+      [product_id, quantity, unit_price||0, purchase_date||new Date().toISOString().split('T')[0], supplier||'', note||'', quantity]
     );
     await db.run2('UPDATE products SET current_stock=current_stock+? WHERE id=?', [quantity, product_id]);
     res.status(201).json(await db.get2(
@@ -414,12 +414,9 @@ app.post('/api/consumptions', auth, canWrite, async (req, res) => {
     if (!prod) return res.status(404).json({ error: 'Mahsulot topilmadi' });
     if (Number(quantity) > Number(prod.current_stock))
       return res.status(400).json({ error: `Omborda yetarli emas (mavjud: ${prod.current_stock} ${prod.unit || ''})` });
-    const r = await db.run2(
-      'INSERT INTO consumptions (product_id,quantity,from_branch_id,to_branch_id,consume_date,note) VALUES (?,?,?,?,?,?)',
-      [product_id, quantity, prod.branch_id, to_branch_id || prod.branch_id, consume_date || new Date().toISOString().split('T')[0], note || '']
-    );
-    await db.run2('UPDATE products SET current_stock=current_stock-? WHERE id=?', [quantity, product_id]);
-    res.status(201).json(await db.get2(CONS_SELECT + ' WHERE co.id=?', [r.lastID]));
+    const ids = await fifoConsume(product_id, quantity, to_branch_id, consume_date || new Date().toISOString().split('T')[0], note || '');
+    const rows = await Promise.all(ids.map(id => db.get2(CONS_SELECT + ' WHERE co.id=?', [id])));
+    res.status(201).json(rows[0]); // birinchi yozuvni qaytaramiz (UI uchun)
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.delete('/api/consumptions/:id', auth, canWrite, async (req, res) => {
@@ -494,6 +491,40 @@ init().then(async () => {
   });
 }).catch(e => { console.error('DB init xatosi:', e); process.exit(1); });
 
+// ── FIFO rasxod: eski partiyadan boshlab narx bo'yicha ajratish ───────────────
+async function fifoConsume(product_id, total_qty, to_branch_id, consume_date, note) {
+  const prod = await db.get2('SELECT * FROM products WHERE id=?', [product_id]);
+  if (!prod) return [];
+  const batches = await db.all2(
+    'SELECT * FROM purchases WHERE product_id=? AND remaining_qty > 0 ORDER BY purchase_date ASC, id ASC',
+    [product_id]
+  );
+  const records = [];
+  let remaining = +total_qty;
+  for (const batch of batches) {
+    if (remaining <= 0) break;
+    const take = Math.min(+(batch.remaining_qty), remaining);
+    const r = await db.run2(
+      'INSERT INTO consumptions (product_id,quantity,from_branch_id,to_branch_id,consume_date,note,unit_price) VALUES (?,?,?,?,?,?,?)',
+      [product_id, +take.toFixed(4), prod.branch_id, to_branch_id || prod.branch_id,
+       consume_date, note, batch.unit_price || 0]
+    );
+    await db.run2('UPDATE purchases SET remaining_qty = remaining_qty - ? WHERE id=?', [take, batch.id]);
+    records.push(r.lastID);
+    remaining = +(remaining - take).toFixed(4);
+  }
+  // Qolgan miqdor uchun partiya topilmasa — narxsiz yozuv
+  if (remaining > 0) {
+    const r = await db.run2(
+      'INSERT INTO consumptions (product_id,quantity,from_branch_id,to_branch_id,consume_date,note,unit_price) VALUES (?,?,?,?,?,?,?)',
+      [product_id, remaining, prod.branch_id, to_branch_id || prod.branch_id, consume_date, note, 0]
+    );
+    records.push(r.lastID);
+  }
+  await db.run2('UPDATE products SET current_stock = current_stock - ? WHERE id=?', [total_qty, product_id]);
+  return records;
+}
+
 // ── Kunlik sarf: bir kun uchun barcha mahsulotlarni rasxod qilish ──────────────
 async function runDailyConsumption(dateStr) {
   // Bu kun allaqachon ishlanganmi?
@@ -503,17 +534,11 @@ async function runDailyConsumption(dateStr) {
   );
   if (exists) return false; // allaqachon ishlangan
 
-  const prods = await db.all2(
-    'SELECT p.*, (SELECT unit_price FROM purchases WHERE product_id=p.id ORDER BY id DESC LIMIT 1) as last_price FROM products p WHERE p.daily_usage > 0'
-  );
+  const prods = await db.all2('SELECT * FROM products WHERE daily_usage > 0');
   for (const p of prods) {
     const qty = Math.min(Number(p.daily_usage), Number(p.current_stock));
     if (qty <= 0) continue;
-    await db.run2(
-      'INSERT INTO consumptions (product_id,quantity,from_branch_id,to_branch_id,consume_date,note,unit_price) VALUES (?,?,?,?,?,?,?)',
-      [p.id, qty, p.branch_id, p.branch_id, dateStr, 'auto_daily', p.last_price || 0]
-    );
-    await db.run2('UPDATE products SET current_stock=current_stock-? WHERE id=?', [qty, p.id]);
+    await fifoConsume(p.id, qty, p.branch_id, dateStr, 'auto_daily');
   }
   console.log(`✅ Kunlik sarf ${dateStr}: ${prods.filter(p=>p.daily_usage>0).length} ta mahsulot`);
   return true;
