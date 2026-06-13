@@ -164,6 +164,19 @@ async function init() {
     if (currentSection !== 'overview') navigate('overview');
   });
 
+  // Brauzer "orqaga" tugmasi — accountdan chiqmasin, sahifani tark etmasin.
+  // Buning o'rniga ichki "orqaga" qiladi: modal yopish → bir pog'ona orqaga → umumiy ko'rinish.
+  history.pushState({ trap: true }, '');
+  window.addEventListener('popstate', () => {
+    // Tuzoqni qayta o'rnatamiz — shunda sahifa hech qachon yopilmaydi
+    history.pushState({ trap: true }, '');
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay?.classList.contains('open')) { closeModal(true); return; }
+    const backBtn = document.querySelector('#content .btn[onclick^="navigate("]');
+    if (backBtn) { backBtn.click(); return; }
+    if (currentSection !== 'overview') navigate('overview');
+  });
+
   // Har 5 daqiqada yangilash
   setInterval(async () => {
     try { await loadAll(); updateAlertBadge(); } catch (_) {}
