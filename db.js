@@ -70,6 +70,17 @@ async function init() {
   // Eski adminlar 'active' boʻlib qolsin
   sqlDb.run("UPDATE users SET status='active' WHERE status IS NULL OR status=''");
 
+  // Filiallarning haqiqiy ma'lumotlari (faqat eski standart nomlar bo'lsa yangilanadi)
+  for (const [oldName, name, addr, phone] of [
+    ['Bosh ofis',  'Drujba filiali',    "Furqat ko'chasi, 15/1",            '+998 78 555 65 75'],
+    ['Filial №1',  'Shahriston filiali', "Amir Temur shoh ko'chasi, 129B",  '+998 78 555 65 75'],
+    ['Filial №2',  'Buxoro filiali',     "Buxoro, Mustaqillik ko'chasi, 19", '+998 78 555 65 75'],
+    ['Filial №3',  'Andijon filiali',    "Andijon, Mashrab ko'chasi, 7",     '+998 78 555 65 75'],
+  ]) {
+    sqlDb.run('UPDATE branches SET name=?, address=?, phone=? WHERE name=?', [name, addr, phone, oldName]);
+  }
+  saveDb();
+
   saveDb();
   await seedData();
   await seedMoreProducts();
@@ -93,10 +104,10 @@ async function seedData() {
 
   const bIds = [];
   for (const [n, a, m, p] of [
-    ['Bosh ofis', "Toshkent sh., Amir Temur ko'ch. 1", 'Aziz Karimov', '+998901234567'],
-    ['Filial №1', "Chilonzor tumani, Bunyodkor ko'ch. 15", 'Sardor Yusupov', '+998901234568'],
-    ['Filial №2', "Yunusobod tumani, Navoiy ko'ch. 45", 'Nilufar Rahimova', '+998901234569'],
-    ['Filial №3', "Mirzo Ulug'bek tumani, Mustaqillik ko'ch. 22", 'Jasur Toshmatov', '+998901234570'],
+    ['Drujba filiali', "Furqat ko'chasi, 15/1", 'Aziz Karimov', '+998 78 555 65 75'],
+    ['Shahriston filiali', "Amir Temur shoh ko'chasi, 129B", 'Sardor Yusupov', '+998 78 555 65 75'],
+    ['Buxoro filiali', "Buxoro, Mustaqillik ko'chasi, 19", 'Nilufar Rahimova', '+998 78 555 65 75'],
+    ['Andijon filiali', "Andijon, Mashrab ko'chasi, 7", 'Jasur Toshmatov', '+998 78 555 65 75'],
   ]) { const r = await db.run2('INSERT INTO branches (name,address,manager,phone) VALUES (?,?,?,?)', [n,a,m,p]); bIds.push(r.lastID); }
 
   const pIds = [];
