@@ -2,7 +2,6 @@
 console.log('[report.js] yuklandi');
 
 function renderReport(c) {
-  console.log('[report.js] renderReport chaqirildi');
   const now = new Date();
   const selYear  = now.getFullYear();
   const selMonth = now.getMonth() + 1;
@@ -33,20 +32,16 @@ function applyReport() {
   const body  = document.getElementById('report-body');
   if (!body) return;
 
-  const monthPurchases = purchases.filter(p => (p.purchase_date || '').startsWith(ym));
-  const totalAll = monthPurchases.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
+  const monthPurchases    = purchases.filter(p => (p.purchase_date || '').startsWith(ym));
+  const monthConsumptions = consumptions.filter(co => (co.consume_date || '').startsWith(ym));
+  const totalSpend = monthPurchases.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
 
   const branchStats = branches.map(b => {
     const bPurch = monthPurchases.filter(p => p.branch_id == b.id);
     const total  = bPurch.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
-    const topMap = {};
-    bPurch.forEach(p => { topMap[p.product_name] = (topMap[p.product_name] || 0) + (p.quantity || 0) * (p.unit_price || 0); });
-    const top = Object.entries(topMap).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
-    return { ...b, purchase_count: bPurch.length, total_amount: total, top_product: top };
+    const cons   = monthConsumptions.filter(co => co.from_branch_id == b.id).length;
+    return { ...b, purchase_count: bPurch.length, total_amount: total, cons_count: cons };
   }).sort((a, b) => b.total_amount - a.total_amount);
-
-  // store for detail view
-  body.dataset.ym = ym;
 
   body.innerHTML = `
     <div class="stats-grid" style="margin-bottom:16px">
@@ -61,9 +56,14 @@ function applyReport() {
           <div class="stat-value">${monthPurchases.length}</div></div>
       </div>
       <div class="stat-card">
+        <div class="stat-icon red"><i class="ti ti-package-export"></i></div>
+        <div><div class="stat-label">Jami rasxodlar</div>
+          <div class="stat-value">${monthConsumptions.length}</div></div>
+      </div>
+      <div class="stat-card">
         <div class="stat-icon amber"><i class="ti ti-coin"></i></div>
         <div><div class="stat-label">Jami xarajat</div>
-          <div class="stat-value" style="font-size:18px">${fmtMoney(totalAll)}</div></div>
+          <div class="stat-value" style="font-size:18px">${fmtMoney(totalSpend)}</div></div>
       </div>
     </div>
     <div class="card" style="margin-bottom:16px">
@@ -71,7 +71,7 @@ function applyReport() {
         <thead><tr><th>Filial</th><th>Sotib olishlar</th><th>Jami xarajat</th><th>Ulush</th></tr></thead>
         <tbody>
           ${branchStats.map(b => {
-            const pct = totalAll > 0 ? (b.total_amount / totalAll * 100).toFixed(1) : 0;
+            const pct = totalSpend > 0 ? (b.total_amount / totalSpend * 100).toFixed(1) : 0;
             return `<tr style="cursor:pointer" onclick="openReportBranchDetail(${b.id})">
               <td style="font-weight:600">${esc(b.name)}</td>
               <td>${b.purchase_count}</td>
@@ -87,22 +87,29 @@ function applyReport() {
         </tbody>
       </table></div>
     </div>
+
     <div class="card">
-      <div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:700;font-size:15px">Batafsil sotib olishlar</div>
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);font-weight:700;font-size:15px">
+        <i class="ti ti-package-export" style="color:#94a3b8;margin-right:6px"></i>Rasxodlar tarixi
+      </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Sana</th><th>Mahsulot</th><th>Filial</th><th>Miqdor</th><th>Narx</th><th>Jami</th><th>Yetkazuvchi</th></tr></thead>
+        <thead><tr>
+          <th>Sana</th><th>Mahsulot</th><th>Ombor (qayerdan)</th><th>Filial uchun</th><th>Miqdor</th><th>Izoh</th>
+        </tr></thead>
         <tbody>
-          ${monthPurchases.length
-            ? monthPurchases.map(p => `<tr>
-                <td style="color:#64748b">${esc(p.purchase_date)}</td>
-                <td style="font-weight:600">${esc(p.product_name || '—')}</td>
-                <td><span class="badge badge-gray">${esc(p.branch_name || '—')}</span></td>
-                <td>${p.quantity} ${esc(p.unit || '')}</td>
-                <td>${fmtMoney(p.unit_price)}</td>
-                <td style="font-weight:600;color:var(--teal)">${fmtMoney((p.quantity || 0) * (p.unit_price || 0))}</td>
-                <td style="color:#64748b">${esc(p.supplier || '—')}</td>
-              </tr>`).join('')
-            : `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-calendar-off"></i><p>Bu oyda sotib olish yoʻq</p></div></td></tr>`
+          ${monthConsumptions.length
+            ? monthConsumptions.map(co => {
+                const cross = co.from_branch_id != co.to_branch_id;
+                return `<tr>
+                  <td style="color:#64748b">${esc(co.consume_date)}</td>
+                  <td style="font-weight:600">${esc(co.product_name || '—')}</td>
+                  <td><span class="badge badge-gray">${esc(co.from_branch_name || '—')}</span></td>
+                  <td><span class="badge ${cross ? 'badge-amber' : 'badge-blue'}">${esc(co.to_branch_name || '—')}${cross ? ' ⇄' : ''}</span></td>
+                  <td style="font-weight:700;color:var(--red)">−${co.quantity} ${esc(co.unit || '')}</td>
+                  <td style="color:#64748b">${esc(co.note || '—')}</td>
+                </tr>`;
+              }).join('')
+            : `<tr><td colspan="6"><div class="empty-state"><i class="ti ti-package-export"></i><p>Bu oyda rasxod yo'q</p></div></td></tr>`
           }
         </tbody>
       </table></div>
@@ -119,19 +126,22 @@ function openReportBranchDetail(branchId) {
   const UZ_MONTHS = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
   const mLabel = `${UZ_MONTHS[month - 1]} ${year}`;
 
-  const list = purchases.filter(p => p.branch_id == branchId && (p.purchase_date || '').startsWith(ym));
-  const total = list.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
+  const list = consumptions.filter(co =>
+    co.from_branch_id == branchId && (co.consume_date || '').startsWith(ym)
+  );
 
   const rows = list.length
-    ? list.map(p => `<tr>
-        <td style="color:#64748b">${esc(p.purchase_date)}</td>
-        <td style="font-weight:600">${esc(p.product_name || '—')}</td>
-        <td>${p.quantity} ${esc(p.unit || '')}</td>
-        <td>${fmtMoney(p.unit_price)}</td>
-        <td style="font-weight:700;color:var(--teal)">${fmtMoney((p.quantity || 0) * (p.unit_price || 0))}</td>
-        <td style="color:#64748b">${esc(p.supplier || '—')}</td>
-      </tr>`).join('')
-    : `<tr><td colspan="6"><div class="empty-state"><i class="ti ti-calendar-off"></i><p>Bu oyda sotib olish yo'q</p></div></td></tr>`;
+    ? list.map(co => {
+        const cross = co.from_branch_id != co.to_branch_id;
+        return `<tr>
+          <td style="color:#64748b">${esc(co.consume_date)}</td>
+          <td style="font-weight:600">${esc(co.product_name || '—')}</td>
+          <td><span class="badge ${cross ? 'badge-amber' : 'badge-blue'}">${esc(co.to_branch_name || '—')}${cross ? ' ⇄' : ''}</span></td>
+          <td style="font-weight:700;color:var(--red)">−${co.quantity} ${esc(co.unit || '')}</td>
+          <td style="color:#64748b">${esc(co.note || '—')}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="5"><div class="empty-state"><i class="ti ti-package-export"></i><p>Bu oyda rasxod yo'q</p></div></td></tr>`;
 
   const c = document.getElementById('content');
   c.innerHTML = `
@@ -139,11 +149,11 @@ function openReportBranchDetail(branchId) {
       <button class="btn btn-secondary btn-icon" onclick="navigate('report')" title="Orqaga"><i class="ti ti-arrow-left"></i></button>
       <div>
         <div class="section-title" style="margin:0"><i class="ti ti-building-store" style="color:var(--teal);margin-right:6px"></i>${esc(bName)}</div>
-        <div style="font-size:13px;color:#94a3b8">${mLabel} — sotib olishlar · Jami: ${fmtMoney(total)}</div>
+        <div style="font-size:13px;color:#94a3b8">${mLabel} — rasxodlar · ${list.length} ta yozuv</div>
       </div>
     </div>
     <div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>Sana</th><th>Mahsulot</th><th>Miqdor</th><th>Narx</th><th>Jami</th><th>Yetkazuvchi</th></tr></thead>
+      <thead><tr><th>Sana</th><th>Mahsulot</th><th>Filial uchun</th><th>Miqdor</th><th>Izoh</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div></div>`;
   paintIcons(c);
