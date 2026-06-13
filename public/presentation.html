@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SaTashkent – Tizim Taqdimoti</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"/>
+<style>
+:root{
+  --brand:#9E1C20;--brand-dark:#761317;--brand-sidebar:#4a0d10;
+  --teal:#0d9488;--blue:#3b82f6;--amber:#f59e0b;--red:#ef4444;--green:#22c55e;--purple:#8b5cf6;
+  --text:#1e293b;--muted:#64748b;--bg:#f5f1f1;--card:#fff;--border:#e7dcdc;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Inter',sans-serif;background:#0a0a0a;color:#fff;overflow:hidden}
+
+/* ── SLIDES ── */
+.deck{width:100vw;height:100vh;position:relative}
+.slide{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  justify-content:center;align-items:center;
+  opacity:0;pointer-events:none;transform:translateX(60px);
+  transition:opacity .5s,transform .5s;
+  padding:48px;text-align:center;
+}
+.slide.active{opacity:1;pointer-events:all;transform:translateX(0)}
+.slide.exit{opacity:0;transform:translateX(-60px)}
+
+/* ── NAVIGATION ── */
+.nav-dots{
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
+  display:flex;gap:8px;z-index:100;
+}
+.nav-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.25);cursor:pointer;transition:.3s}
+.nav-dot.active{background:#fff;width:24px;border-radius:4px}
+.nav-arrows{position:fixed;bottom:20px;right:32px;display:flex;gap:12px;z-index:100}
+.nav-btn{
+  width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.3);
+  background:rgba(255,255,255,.08);color:#fff;font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:.2s;
+  backdrop-filter:blur(8px);
+}
+.nav-btn:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.6)}
+.slide-num{position:fixed;top:20px;right:32px;font-size:12px;color:rgba(255,255,255,.4);z-index:100;font-weight:500}
+
+/* ── TYPOGRAPHY ── */
+.tag{display:inline-block;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:16px}
+h1{font-size:clamp(2rem,4vw,3.5rem);font-weight:900;line-height:1.1;margin-bottom:16px}
+h2{font-size:clamp(1.4rem,2.5vw,2.2rem);font-weight:800;margin-bottom:12px}
+h3{font-size:1.1rem;font-weight:700;margin-bottom:8px}
+p{font-size:clamp(.85rem,1.2vw,1rem);line-height:1.6;color:rgba(255,255,255,.75)}
+.lead{font-size:clamp(1rem,1.6vw,1.25rem);line-height:1.6;color:rgba(255,255,255,.8)}
+
+/* ── CARDS ── */
+.card{
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+  border-radius:16px;padding:24px;backdrop-filter:blur(8px);
+}
+.card-grid{display:grid;gap:16px;width:100%;max-width:1100px}
+.card-grid.cols2{grid-template-columns:repeat(2,1fr)}
+.card-grid.cols3{grid-template-columns:repeat(3,1fr)}
+.card-grid.cols4{grid-template-columns:repeat(4,1fr)}
+
+/* ── ACCENT ── */
+.accent-brand{color:var(--brand)}
+.accent-teal{color:var(--teal)}
+.accent-blue{color:var(--blue)}
+.accent-amber{color:var(--amber)}
+.accent-green{color:var(--green)}
+.accent-purple{color:var(--purple)}
+
+/* ── BADGE ── */
+.badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600}
+.badge-brand{background:rgba(158,28,32,.25);color:#fca5a5;border:1px solid rgba(158,28,32,.4)}
+.badge-teal{background:rgba(13,148,136,.2);color:#5eead4;border:1px solid rgba(13,148,136,.3)}
+.badge-blue{background:rgba(59,130,246,.2);color:#93c5fd;border:1px solid rgba(59,130,246,.3)}
+.badge-amber{background:rgba(245,158,11,.2);color:#fcd34d;border:1px solid rgba(245,158,11,.3)}
+.badge-green{background:rgba(34,197,94,.2);color:#86efac;border:1px solid rgba(34,197,94,.3)}
+.badge-purple{background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.3)}
+
+/* ── ICON BOX ── */
+.icon-box{
+  width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  font-size:24px;margin-bottom:14px;flex-shrink:0;
+}
+
+/* ── FLOW ── */
+.flow{display:flex;align-items:center;gap:0;width:100%;max-width:1000px;flex-wrap:nowrap}
+.flow-step{
+  flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);
+  border-radius:14px;padding:18px 14px;text-align:center;position:relative;
+}
+.flow-arrow{
+  font-size:22px;color:rgba(255,255,255,.35);flex-shrink:0;padding:0 8px;
+}
+.flow-step .step-num{
+  width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;margin:0 auto 10px;
+}
+
+/* ── TABLE MOCK ── */
+.mock-table{width:100%;border-collapse:collapse;font-size:13px;border-radius:12px;overflow:hidden}
+.mock-table th{background:rgba(255,255,255,.1);padding:10px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.5)}
+.mock-table td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06);text-align:left;color:rgba(255,255,255,.85)}
+.mock-table tr:last-child td{border-bottom:none}
+.mock-table tr:hover td{background:rgba(255,255,255,.04)}
+
+/* ── UI MOCK ── */
+.mock-sidebar{
+  width:220px;background:var(--brand-sidebar);border-radius:16px 0 0 16px;
+  padding:20px 0;display:flex;flex-direction:column;flex-shrink:0;
+}
+.mock-sidebar-logo{padding:0 16px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:8px}
+.mock-sidebar-logo .logo-circle{width:36px;height:36px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+.mock-nav-item{padding:9px 16px;display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(255,255,255,.65);cursor:default;transition:.2s;margin:2px 8px;border-radius:8px}
+.mock-nav-item.active{background:rgba(255,255,255,.15);color:#fff}
+.mock-nav-icon{width:18px;text-align:center;font-size:16px}
+.mock-content{flex:1;background:rgba(255,255,255,.05);border-radius:0 16px 16px 0;padding:20px;overflow:hidden}
+.mock-topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.mock-title{font-size:16px;font-weight:700}
+.mock-btn{padding:7px 16px;border-radius:8px;background:var(--brand);color:#fff;font-size:12px;font-weight:600;border:none;cursor:default}
+
+/* ── STAT CARDS ── */
+.stat-card{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:20px;text-align:left}
+.stat-card .stat-icon{font-size:28px;margin-bottom:12px}
+.stat-card .stat-val{font-size:1.8rem;font-weight:800;margin-bottom:4px}
+.stat-card .stat-label{font-size:12px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px}
+
+/* ── PROGRESS ── */
+.progress-bar{height:8px;border-radius:4px;background:rgba(255,255,255,.1);overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;border-radius:4px;transition:width 1s}
+
+/* ── SLIDE BACKGROUNDS ── */
+.bg-brand{background:radial-gradient(ellipse at 20% 50%, rgba(158,28,32,.4) 0%, transparent 60%),radial-gradient(ellipse at 80% 20%, rgba(118,19,23,.3) 0%, transparent 50%),linear-gradient(135deg,#0f0a0a 0%,#1a0808 50%,#0f0505 100%)}
+.bg-dark{background:linear-gradient(135deg,#0a0a14 0%,#0d0d1a 100%)}
+.bg-teal{background:radial-gradient(ellipse at 30% 50%, rgba(13,148,136,.25) 0%, transparent 60%),linear-gradient(135deg,#03080f 0%,#071416 100%)}
+.bg-blue{background:radial-gradient(ellipse at 70% 30%, rgba(59,130,246,.2) 0%, transparent 60%),linear-gradient(135deg,#03080f 0%,#070d1a 100%)}
+.bg-amber{background:radial-gradient(ellipse at 40% 60%, rgba(245,158,11,.2) 0%, transparent 60%),linear-gradient(135deg,#0a0800 0%,#130f00 100%)}
+.bg-purple{background:radial-gradient(ellipse at 60% 40%, rgba(139,92,246,.2) 0%, transparent 60%),linear-gradient(135deg,#06030f 0%,#0d0a1a 100%)}
+.bg-green{background:radial-gradient(ellipse at 30% 60%, rgba(34,197,94,.2) 0%, transparent 60%),linear-gradient(135deg,#010a03 0%,#030f07 100%)}
+
+/* ── DIVIDER ── */
+.divider{width:60px;height:4px;border-radius:2px;margin:16px auto}
+
+/* ── ROLE PILL ── */
+.role-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border-radius:40px;font-size:14px;font-weight:600;margin:6px}
+
+/* ── GLOW ── */
+.glow-brand{box-shadow:0 0 40px rgba(158,28,32,.3)}
+.glow-teal{box-shadow:0 0 40px rgba(13,148,136,.3)}
+.glow-blue{box-shadow:0 0 40px rgba(59,130,246,.3)}
+
+/* ── ANIMATION ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.slide.active .anim-1{animation:fadeUp .5s .1s both}
+.slide.active .anim-2{animation:fadeUp .5s .25s both}
+.slide.active .anim-3{animation:fadeUp .5s .4s both}
+.slide.active .anim-4{animation:fadeUp .5s .55s both}
+.slide.active .anim-5{animation:fadeUp .5s .7s both}
+.slide.active .anim-6{animation:fadeUp .5s .85s both}
+
+/* ── LOGO RING ── */
+@keyframes ringRotate{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.logo-ring{
+  width:120px;height:120px;border-radius:50%;
+  border:3px solid transparent;
+  background:linear-gradient(#0a0a0a,#0a0a0a) padding-box,
+             linear-gradient(45deg,var(--brand),transparent,var(--brand)) border-box;
+  animation:ringRotate 4s linear infinite;
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 24px;
+}
+.logo-img{width:90px;height:90px;border-radius:50%;object-fit:cover}
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+<!-- ─── SLIDE 1: TITLE ─── -->
+<div class="slide bg-brand active" data-slide="0">
+  <div class="anim-1">
+    <div class="logo-ring">
+      <img class="logo-img" src="https://satashkent.uz/images/logo.jpg" onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\'font-size:40px;font-weight:900;color:#fff\'>S</div>'"/>
+    </div>
+  </div>
+  <div class="anim-2">
+    <div class="tag" style="background:rgba(158,28,32,.3);color:#fca5a5;border:1px solid rgba(158,28,32,.5)">🍽️ Ta'minot Tizimi</div>
+    <h1>SaTashkent<br/><span style="color:rgba(255,255,255,.4);font-size:60%">Boshqaruv Paneli</span></h1>
+    <div class="divider" style="background:var(--brand)"></div>
+  </div>
+  <div class="anim-3">
+    <p class="lead" style="max-width:600px">Ombor, xaridlar, rasxodlar va filiallarni boshqarish uchun<br/>to'liq raqamli tizim</p>
+  </div>
+  <div class="anim-4" style="margin-top:40px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+    <span class="badge badge-brand">📦 Ombor nazorati</span>
+    <span class="badge badge-teal">🔄 FIFO hisobi</span>
+    <span class="badge badge-blue">📊 Hisobotlar</span>
+    <span class="badge badge-amber">⏰ Avtomatik sarf</span>
+    <span class="badge badge-purple">👥 Ko'p foydalanuvchi</span>
+  </div>
+</div>
+
+<!-- ─── SLIDE 2: TIZIM QANDAY ISHLAYDI ─── -->
+<div class="slide bg-dark" data-slide="1">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.3)">Tizim arxitekturasi</div>
+    <h2>Tizim qanday ishlaydi?</h2>
+    <div class="divider" style="background:var(--blue)"></div>
+  </div>
+  <div class="anim-2" style="display:flex;gap:24px;width:100%;max-width:1100px;margin-top:8px">
+    <!-- left: roles -->
+    <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+      <div class="card" style="text-align:left">
+        <h3 style="margin-bottom:16px;color:rgba(255,255,255,.5);font-size:12px;text-transform:uppercase;letter-spacing:.5px">👤 Foydalanuvchi brauzeri</h3>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="background:rgba(158,28,32,.15);border:1px solid rgba(158,28,32,.3);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px">
+            <span style="font-size:20px">🔐</span>
+            <div><div style="font-size:13px;font-weight:600">Login sahifasi</div><div style="font-size:11px;color:rgba(255,255,255,.45)">JWT token olish</div></div>
+          </div>
+          <div style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px">
+            <span style="font-size:20px">🖥️</span>
+            <div><div style="font-size:13px;font-weight:600">Dashboard (SPA)</div><div style="font-size:11px;color:rgba(255,255,255,.45)">16 ta JS modul, bir sahifa</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="text-align:left;border-color:rgba(13,148,136,.3)">
+        <h3 style="margin-bottom:12px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4)">📡 API so'rovlar</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+          <div style="padding:7px 10px;background:rgba(255,255,255,.05);border-radius:8px">GET /api/products</div>
+          <div style="padding:7px 10px;background:rgba(255,255,255,.05);border-radius:8px">GET /api/branches</div>
+          <div style="padding:7px 10px;background:rgba(255,255,255,.05);border-radius:8px">POST /api/purchases</div>
+          <div style="padding:7px 10px;background:rgba(255,255,255,.05);border-radius:8px">GET /api/consumptions</div>
+        </div>
+      </div>
+    </div>
+    <!-- arrow -->
+    <div style="display:flex;align-items:center;font-size:30px;color:rgba(255,255,255,.2)">⇄</div>
+    <!-- right: server -->
+    <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+      <div class="card" style="text-align:left;border-color:rgba(245,158,11,.3)">
+        <h3 style="margin-bottom:12px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4)">⚙️ Node.js + Express Server</h3>
+        <div style="display:flex;flex-direction:column;gap:7px;font-size:13px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="color:var(--amber)">→</span>JWT token tekshirish</div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="color:var(--amber)">→</span>Rol (admin/branch/viewer) asosida ruxsat</div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="color:var(--amber)">→</span>FIFO inventar hisobi</div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="color:var(--amber)">→</span>Kunlik avtomatik sarf (midnight)</div>
+        </div>
+      </div>
+      <div class="card" style="text-align:left;border-color:rgba(139,92,246,.3)">
+        <h3 style="margin-bottom:10px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4)">🗄️ SQLite ma'lumotlar bazasi</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+          <div style="padding:7px 10px;background:rgba(139,92,246,.1);border-radius:8px;border:1px solid rgba(139,92,246,.2)">branches</div>
+          <div style="padding:7px 10px;background:rgba(139,92,246,.1);border-radius:8px;border:1px solid rgba(139,92,246,.2)">products</div>
+          <div style="padding:7px 10px;background:rgba(139,92,246,.1);border-radius:8px;border:1px solid rgba(139,92,246,.2)">purchases</div>
+          <div style="padding:7px 10px;background:rgba(139,92,246,.1);border-radius:8px;border:1px solid rgba(139,92,246,.2)">consumptions</div>
+          <div style="padding:7px 10px;background:rgba(139,92,246,.1);border-radius:8px;border:1px solid rgba(139,92,246,.2)">users</div>
+          <div style="padding:7px 10px;background:rgba(139,92,246,.1);border-radius:8px;border:1px solid rgba(139,92,246,.2)">settings</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SLIDE 3: FOYDALANUVCHILAR VA ROLLAR ─── -->
+<div class="slide bg-purple" data-slide="2">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.4)">👥 Foydalanuvchilar</div>
+    <h2>Uch xil rol — uch xil huquq</h2>
+    <div class="divider" style="background:var(--purple)"></div>
+  </div>
+  <div class="card-grid cols3 anim-2" style="max-width:950px">
+    <!-- Admin -->
+    <div class="card" style="border-color:rgba(245,158,11,.4);text-align:left">
+      <div class="icon-box" style="background:rgba(245,158,11,.15);font-size:28px">👑</div>
+      <h3 style="color:#fcd34d;margin-bottom:12px">Administrator</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Barcha bo'limlar</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Foydalanuvchilar boshqaruvi</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Xarid, rasxod, filial</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Hisobotlar va statistika</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Tovarlarni o'chirish</div>
+      </div>
+    </div>
+    <!-- Branch -->
+    <div class="card" style="border-color:rgba(59,130,246,.4);text-align:left">
+      <div class="icon-box" style="background:rgba(59,130,246,.15);font-size:28px">🏪</div>
+      <h3 style="color:#93c5fd;margin-bottom:12px">Filial omborchisi</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#93c5fd;font-size:16px">✓</span>O'z filiali ma'lumotlari</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#93c5fd;font-size:16px">✓</span>Ombor ko'rish va kiritish</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#93c5fd;font-size:16px">✓</span>Xarid va rasxod qo'shish</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Boshqa filiallar</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Foydalanuvchi boshqaruv</span></div>
+      </div>
+    </div>
+    <!-- Viewer -->
+    <div class="card" style="border-color:rgba(100,116,139,.4);text-align:left">
+      <div class="icon-box" style="background:rgba(100,116,139,.15);font-size:28px">👁️</div>
+      <h3 style="color:#94a3b8;margin-bottom:12px">Kuzatuvchi (Viewer)</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#94a3b8;font-size:16px">✓</span>Barcha ma'lumotlarni ko'rish</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#94a3b8;font-size:16px">✓</span>Hisobot va statistika</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Yozish, o'chirish yo'q</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Foydalanuvchi boshqaruv</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="anim-3" style="margin-top:20px">
+    <div class="card" style="display:inline-flex;gap:20px;align-items:center;padding:14px 28px">
+      <span style="font-size:13px;color:rgba(255,255,255,.5)">🔐 Kirish:</span>
+      <span style="font-size:13px">Login + parol → <strong style="color:#c4b5fd">JWT token</strong> (HttpOnly cookie) → har bir API so'rovda tekshiriladi</span>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SLIDE 4: UMUMIY KO'RINISH ─── -->
+<div class="slide bg-brand" data-slide="3">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(158,28,32,.3);color:#fca5a5;border:1px solid rgba(158,28,32,.5)">📊 Bosh sahifa</div>
+    <h2>Umumiy ko'rinish</h2>
+    <div class="divider" style="background:var(--brand)"></div>
+  </div>
+  <!-- Dashboard mock -->
+  <div class="anim-2" style="display:flex;width:100%;max-width:1050px;height:380px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <!-- sidebar -->
+    <div class="mock-sidebar">
+      <div class="mock-sidebar-logo">
+        <div class="logo-circle">S</div>
+        <div><div style="font-size:13px;font-weight:700">SaTashkent</div><div style="font-size:10px;color:rgba(255,255,255,.4)">Ta'minot Bo'limi</div></div>
+      </div>
+      <div class="mock-nav-item active">🏠 <span>Umumiy ko'rinish</span></div>
+      <div class="mock-nav-item">📦 <span>Ombor</span></div>
+      <div class="mock-nav-item">🛒 <span>Sotib olishlar</span></div>
+      <div class="mock-nav-item">📤 <span>Rasxodlar</span></div>
+      <div class="mock-nav-item">🏪 <span>Filiallar</span></div>
+      <div class="mock-nav-item">📈 <span>Hisobot</span></div>
+    </div>
+    <!-- content -->
+    <div class="mock-content">
+      <div class="mock-topbar">
+        <span class="mock-title">Umumiy ko'rinish</span>
+        <div style="display:flex;gap:8px;font-size:11px">
+          <span style="padding:4px 8px;border-radius:6px;background:rgba(255,255,255,.1)">UZ</span>
+          <span style="padding:4px 8px;border-radius:6px;background:rgba(255,255,255,.1)">RU</span>
+          <span style="padding:4px 8px;border-radius:6px;background:rgba(255,255,255,.1)">EN</span>
+          <span style="padding:4px 8px;border-radius:6px;background:rgba(158,28,32,.4);position:relative">🔔 <span style="position:absolute;top:-4px;right:-4px;background:#ef4444;border-radius:50%;width:14px;height:14px;font-size:9px;display:flex;align-items:center;justify-content:center">4</span></span>
+        </div>
+      </div>
+      <!-- Stat cards -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
+        <div style="background:rgba(255,255,255,.06);border-radius:10px;padding:12px;border:1px solid rgba(255,255,255,.08)">
+          <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">Jami mahsulot</div>
+          <div style="font-size:20px;font-weight:800">43</div>
+        </div>
+        <div style="background:rgba(255,255,255,.06);border-radius:10px;padding:12px;border:1px solid rgba(245,158,11,.3)">
+          <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">Shoshilinch (≤2)</div>
+          <div style="font-size:20px;font-weight:800;color:#fcd34d">22</div>
+        </div>
+        <div style="background:rgba(255,255,255,.06);border-radius:10px;padding:12px;border:1px solid rgba(239,68,68,.3)">
+          <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">Kam qoldi (≤7)</div>
+          <div style="font-size:20px;font-weight:800;color:#fca5a5">32</div>
+        </div>
+        <div style="background:rgba(255,255,255,.06);border-radius:10px;padding:12px;border:1px solid rgba(255,255,255,.08)">
+          <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">Oylik xarajat</div>
+          <div style="font-size:14px;font-weight:800">7,595,000 so'm</div>
+        </div>
+      </div>
+      <!-- Alert -->
+      <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:10px 14px;font-size:12px;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+        🔔 <strong>4 ta mahsulot tugadi!</strong> — Ro'yxatni ko'rish uchun bosing →
+      </div>
+      <!-- Mini table -->
+      <div style="font-size:11px">
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:4px;padding:6px 10px;color:rgba(255,255,255,.4);border-bottom:1px solid rgba(255,255,255,.08)">
+          <span>MAHSULOT</span><span>OMBORDA</span><span>KUNLIK SARF</span><span>QOLDI</span>
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:4px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06)">
+          <span>Printer qog'oz</span><span style="color:#fcd34d">4.2 quti</span><span>0.8/kun</span><span style="color:#f87171">5.3 kun</span>
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:4px;padding:8px 10px">
+          <span>Limon</span><span style="color:#fcd34d">2 kg</span><span>1/kun</span><span style="color:#f87171">2.0 kun</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="anim-3" style="margin-top:16px;display:flex;gap:12px">
+    <span class="badge badge-brand">📊 4 ta karta — asosiy ko'rsatkichlar</span>
+    <span class="badge badge-amber">⚠️ Tugayotgan tovarlar bildirishnomasi</span>
+    <span class="badge badge-teal">🔔 Yangi ogohlantirish — qo'ng'iroq ovozi</span>
+  </div>
+</div>
+
+<!-- ─── SLIDE 5: OMBOR ─── -->
+<div class="slide bg-teal" data-slide="4">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(13,148,136,.2);color:#5eead4;border:1px solid rgba(13,148,136,.4)">📦 Bo'lim</div>
+    <h2>Ombor — Mahsulotlar ro'yxati</h2>
+    <div class="divider" style="background:var(--teal)"></div>
+  </div>
+  <div class="anim-2" style="width:100%;max-width:1000px">
+    <div class="card" style="border-color:rgba(13,148,136,.3)">
+      <table class="mock-table">
+        <thead>
+          <tr>
+            <th>MAHSULOT</th><th>KATEGORIYA</th><th>FILIAL</th><th>MIQDOR</th><th>KUNLIK SARF</th><th>MIN STOK</th><th>HOLAT</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Un (Bug'doy)</strong></td>
+            <td><span class="badge badge-teal" style="font-size:11px">Oziq-ovqat</span></td>
+            <td>Drujba filiali</td>
+            <td><strong>48 kg</strong></td>
+            <td>5 kg/kun</td>
+            <td>10 kg</td>
+            <td><span style="background:rgba(34,197,94,.15);color:#86efac;padding:3px 10px;border-radius:20px;font-size:11px">✓ Yetarli</span></td>
+          </tr>
+          <tr>
+            <td><strong>Limon</strong></td>
+            <td><span class="badge badge-teal" style="font-size:11px">Oziq-ovqat</span></td>
+            <td>Filial №1</td>
+            <td style="color:#fcd34d"><strong>2 kg</strong></td>
+            <td>1 kg/kun</td>
+            <td>5 kg</td>
+            <td><span style="background:rgba(245,158,11,.15);color:#fcd34d;padding:3px 10px;border-radius:20px;font-size:11px">⚠ 2 kun</span></td>
+          </tr>
+          <tr>
+            <td><strong>Pomidor</strong></td>
+            <td><span class="badge badge-teal" style="font-size:11px">Oziq-ovqat</span></td>
+            <td>Filial №1</td>
+            <td style="color:#f87171"><strong>3 kg</strong></td>
+            <td>5 kg/kun</td>
+            <td>10 kg</td>
+            <td><span style="background:rgba(239,68,68,.15);color:#fca5a5;padding:3px 10px;border-radius:20px;font-size:11px">🚨 0.6 kun</span></td>
+          </tr>
+          <tr>
+            <td><strong>Printer qog'oz</strong></td>
+            <td><span class="badge badge-blue" style="font-size:11px">Ofis</span></td>
+            <td>Bosh ofis</td>
+            <td style="color:#fcd34d"><strong>4.2 quti</strong></td>
+            <td>0.8/kun</td>
+            <td>2 quti</td>
+            <td><span style="background:rgba(245,158,11,.15);color:#fcd34d;padding:3px 10px;border-radius:20px;font-size:11px">⚠ 5.3 kun</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="anim-3" style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <span class="badge badge-teal">📂 Kategoriya bo'yicha filter</span>
+    <span class="badge badge-blue">🔍 Qidirish</span>
+    <span class="badge badge-amber">↑↓ Ustun bo'yicha saralash</span>
+    <span class="badge badge-green">➕ Yangi mahsulot qo'shish</span>
+  </div>
+</div>
+
+<!-- ─── SLIDE 6: SOTIB OLISHLAR ─── -->
+<div class="slide bg-blue" data-slide="5">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(59,130,246,.2);color:#93c5fd;border:1px solid rgba(59,130,246,.4)">🛒 Xaridlar</div>
+    <h2>Sotib olishlar — Kirim operatsiyalari</h2>
+    <div class="divider" style="background:var(--blue)"></div>
+  </div>
+  <div class="anim-2" style="display:flex;gap:20px;width:100%;max-width:1050px">
+    <div style="flex:1.6">
+      <div class="card" style="border-color:rgba(59,130,246,.3)">
+        <table class="mock-table">
+          <thead>
+            <tr><th>SANA</th><th>MAHSULOT</th><th>MIQDOR</th><th>NARX</th><th>JAMI</th><th>TA'MINOTCHI</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="color:rgba(255,255,255,.5)">12.06.2026</td>
+              <td><strong>Un (Bug'doy)</strong></td>
+              <td>50 kg</td>
+              <td>3,500 so'm</td>
+              <td style="color:#93c5fd;font-weight:700">175,000 so'm</td>
+              <td>Sarvar LLC</td>
+            </tr>
+            <tr>
+              <td style="color:rgba(255,255,255,.5)">11.06.2026</td>
+              <td><strong>Pomidor</strong></td>
+              <td>20 kg</td>
+              <td>8,000 so'm</td>
+              <td style="color:#93c5fd;font-weight:700">160,000 so'm</td>
+              <td>Bozor</td>
+            </tr>
+            <tr>
+              <td style="color:rgba(255,255,255,.5)">10.06.2026</td>
+              <td><strong>Limon</strong></td>
+              <td>10 kg</td>
+              <td>12,000 so'm</td>
+              <td style="color:#93c5fd;font-weight:700">120,000 so'm</td>
+              <td>Hamkor</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+      <div class="card" style="border-color:rgba(59,130,246,.3);text-align:left">
+        <h3 style="margin-bottom:12px;color:#93c5fd">➕ Xarid qo'shish</h3>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <div style="background:rgba(255,255,255,.05);border-radius:8px;padding:8px 12px">📦 Mahsulot tanlash</div>
+          <div style="background:rgba(255,255,255,.05);border-radius:8px;padding:8px 12px">🔢 Miqdor kiriting</div>
+          <div style="background:rgba(255,255,255,.05);border-radius:8px;padding:8px 12px">💰 Birlik narxini kiriting</div>
+          <div style="background:rgba(255,255,255,.05);border-radius:8px;padding:8px 12px">📅 Sana & Ta'minotchi</div>
+          <div style="background:rgba(59,130,246,.2);border:1px solid rgba(59,130,246,.4);border-radius:8px;padding:8px 12px;color:#93c5fd;font-weight:600">✓ Saqlash → Ombor yangilanadi</div>
+        </div>
+      </div>
+      <div class="card" style="border-color:rgba(13,148,136,.3);text-align:left;padding:14px">
+        <div style="font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;margin-bottom:8px">🔄 FIFO metodi</div>
+        <p style="font-size:13px;line-height:1.5">Har bir xarid partiyasining narxi alohida saqlanadi. Rasxod bo'lganda <strong style="color:#5eead4">eng eski partiya birinchi sarflanadi</strong></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SLIDE 7: FIFO ─── -->
+<div class="slide bg-amber" data-slide="6">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(245,158,11,.2);color:#fcd34d;border:1px solid rgba(245,158,11,.4)">🔄 FIFO Metodi</div>
+    <h2>FIFO — Narx hisobi qanday ishlaydi?</h2>
+    <div class="divider" style="background:var(--amber)"></div>
+  </div>
+  <div class="anim-2" style="width:100%;max-width:960px">
+    <!-- FIFO visual -->
+    <div class="card" style="border-color:rgba(245,158,11,.3);margin-bottom:16px">
+      <div style="font-size:13px;color:rgba(255,255,255,.5);margin-bottom:16px;text-align:left">Misol: Limon xaridlari</div>
+      <div style="display:flex;gap:12px;margin-bottom:20px">
+        <div style="flex:1;background:rgba(34,197,94,.1);border:2px solid rgba(34,197,94,.4);border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:11px;color:#86efac;margin-bottom:6px">📦 1-PARTIYA (Aprel)</div>
+          <div style="font-size:22px;font-weight:800">10 kg</div>
+          <div style="font-size:13px;color:rgba(255,255,255,.6);margin-top:4px">10,000 so'm/kg</div>
+          <div style="margin-top:8px;font-size:11px;background:rgba(34,197,94,.15);border-radius:6px;padding:4px 8px;color:#86efac">Eski → Birinchi sarflanadi</div>
+        </div>
+        <div style="display:flex;align-items:center;font-size:24px;color:rgba(255,255,255,.3)">→</div>
+        <div style="flex:1;background:rgba(59,130,246,.1);border:2px solid rgba(59,130,246,.4);border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:11px;color:#93c5fd;margin-bottom:6px">📦 2-PARTIYA (May)</div>
+          <div style="font-size:22px;font-weight:800">15 kg</div>
+          <div style="font-size:13px;color:rgba(255,255,255,.6);margin-top:4px">12,000 so'm/kg</div>
+          <div style="margin-top:8px;font-size:11px;background:rgba(59,130,246,.15);border-radius:6px;padding:4px 8px;color:#93c5fd">Yangi → Keyin sarflanadi</div>
+        </div>
+        <div style="display:flex;align-items:center;font-size:24px;color:rgba(255,255,255,.3)">→</div>
+        <div style="flex:1;background:rgba(245,158,11,.1);border:2px dashed rgba(245,158,11,.4);border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:11px;color:#fcd34d;margin-bottom:6px">📤 12 kg RASXOD</div>
+          <div style="font-size:14px;line-height:1.5">
+            <div style="color:#86efac">10 kg × 10,000 = <strong>100,000</strong></div>
+            <div style="color:#93c5fd">2 kg × 12,000 = <strong>24,000</strong></div>
+            <div style="border-top:1px solid rgba(255,255,255,.15);margin-top:8px;padding-top:8px;color:#fcd34d;font-size:15px;font-weight:700">Jami: 124,000 so'm</div>
+          </div>
+        </div>
+      </div>
+      <div style="background:rgba(245,158,11,.1);border-radius:10px;padding:12px;font-size:13px;color:rgba(255,255,255,.7);text-align:left">
+        💡 <strong style="color:#fcd34d">Natija:</strong> Har xil narxda xarid qilingan tovarlar to'g'ri hisoblanadi — eski stok birinchi tugatiladi, keyin yangi stok ishga kiradi. Hisobotda haqiqiy narx ko'rinadi.
+      </div>
+    </div>
+  </div>
+  <div class="anim-3" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <span class="badge badge-amber">📊 Har bir rasxod o'z narxi bilan saqlanadi</span>
+    <span class="badge badge-green">✓ Moliyaviy hisob aniq va ishonchli</span>
+  </div>
+</div>
+
+<!-- ─── SLIDE 8: RASXODLAR ─── -->
+<div class="slide bg-dark" data-slide="7">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3)">📤 Rasxodlar</div>
+    <h2>Rasxodlar — Ikki xil sarf turi</h2>
+    <div class="divider" style="background:var(--red)"></div>
+  </div>
+  <div class="anim-2" style="display:flex;gap:20px;width:100%;max-width:1000px">
+    <!-- Manual -->
+    <div class="card" style="flex:1;border-color:rgba(239,68,68,.3);text-align:left">
+      <div class="icon-box" style="background:rgba(239,68,68,.15)">✋</div>
+      <h3 style="color:#fca5a5;margin-bottom:14px">Qo'lda rasxod</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:8px">📦 Mahsulot va miqdor tanlash</div>
+        <div style="display:flex;align-items:center;gap:8px">🏪 Qaysi filiala — tanlash</div>
+        <div style="display:flex;align-items:center;gap:8px">📅 Sana va izoh kiritish</div>
+        <div style="display:flex;align-items:center;gap:8px">💾 Saqlash → FIFO hisobi → Ombor kamayadi</div>
+      </div>
+      <div style="background:rgba(255,255,255,.05);border-radius:10px;padding:10px;font-size:12px">
+        <table style="width:100%;border-collapse:collapse">
+          <tr style="color:rgba(255,255,255,.4);font-size:11px">
+            <td>Sana</td><td>Mahsulot</td><td>Miqdor</td><td>Narx</td>
+          </tr>
+          <tr style="border-top:1px solid rgba(255,255,255,.08)">
+            <td style="padding:6px 0;color:rgba(255,255,255,.5)">13.06</td>
+            <td><strong>Non</strong></td>
+            <td style="color:#f87171">−5 dona</td>
+            <td>3,500 so'm</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <!-- Auto -->
+    <div class="card" style="flex:1;border-color:rgba(13,148,136,.3);text-align:left">
+      <div class="icon-box" style="background:rgba(13,148,136,.15)">🤖</div>
+      <h3 style="color:#5eead4;margin-bottom:14px">Kunlik avtomatik sarf</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:8px">⏰ Har kuni yarim tunda ishga tushadi</div>
+        <div style="display:flex;align-items:center;gap:8px">📋 Mahsulotdagi "Kunlik sarf" miqdori</div>
+        <div style="display:flex;align-items:center;gap:8px">🔄 FIFO bilan ombor kamayadi</div>
+        <div style="display:flex;align-items:center;gap:8px;color:#5eead4">🏷️ Izohda: <strong>"Kunlik sarf"</strong></div>
+      </div>
+      <!-- Mini flow -->
+      <div style="background:rgba(13,148,136,.08);border-radius:10px;padding:12px;font-size:12px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:20px;height:20px;background:rgba(13,148,136,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px">1</span>Bugun: 10 kg Non omborda</div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:20px;height:20px;background:rgba(13,148,136,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px">2</span>Kunlik sarf: 2 kg</div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:20px;height:20px;background:rgba(13,148,136,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px">3</span>Ertaga: 8 kg Non omborda</div>
+          <div style="display:flex;align-items:center;gap:8px"><span style="width:20px;height:20px;background:rgba(13,148,136,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px">4</span>Hisobotda: −2 kg (13.06.2026)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="anim-3" style="margin-top:16px">
+    <div class="card" style="display:inline-flex;gap:8px;align-items:center;padding:10px 20px;border-color:rgba(245,158,11,.3)">
+      <span style="color:#fcd34d">⚠️</span>
+      <span style="font-size:13px">Server o'chirilsa ham, qayta ishga tushganda <strong style="color:#fcd34d">o'tib ketgan kunlarni catch-up</strong> qiladi</span>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SLIDE 9: FILIALLAR ─── -->
+<div class="slide bg-green" data-slide="8">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(34,197,94,.2);color:#86efac;border:1px solid rgba(34,197,94,.4)">🏪 Filiallar</div>
+    <h2>Filiallar — Hududiy bo'linmalar</h2>
+    <div class="divider" style="background:var(--green)"></div>
+  </div>
+  <div class="card-grid cols4 anim-2" style="max-width:1000px">
+    <div class="card" style="border-color:rgba(34,197,94,.3);text-align:left">
+      <div style="font-size:24px;margin-bottom:12px">🏛️</div>
+      <h3 style="color:#86efac;font-size:14px">Drujba filiali</h3>
+      <p style="font-size:12px;margin-top:6px">Furqat ko'chasi, 15/1</p>
+      <p style="font-size:12px;color:rgba(255,255,255,.4);margin-top:4px">+998 78 555 65 75</p>
+      <div style="margin-top:10px;font-size:11px;background:rgba(34,197,94,.1);border-radius:6px;padding:5px 8px;color:#86efac">Bosh ofis</div>
+    </div>
+    <div class="card" style="border-color:rgba(34,197,94,.25);text-align:left">
+      <div style="font-size:24px;margin-bottom:12px">🏪</div>
+      <h3 style="color:#86efac;font-size:14px">Shahriston filiali</h3>
+      <p style="font-size:12px;margin-top:6px">Amir Temur shoh ko'chasi, 129B</p>
+      <p style="font-size:12px;color:rgba(255,255,255,.4);margin-top:4px">+998 78 555 65 75</p>
+      <div style="margin-top:10px;font-size:11px;background:rgba(59,130,246,.1);border-radius:6px;padding:5px 8px;color:#93c5fd">Filial №1</div>
+    </div>
+    <div class="card" style="border-color:rgba(34,197,94,.25);text-align:left">
+      <div style="font-size:24px;margin-bottom:12px">🏪</div>
+      <h3 style="color:#86efac;font-size:14px">Buxoro filiali</h3>
+      <p style="font-size:12px;margin-top:6px">Mustaqillik ko'chasi, 19</p>
+      <p style="font-size:12px;color:rgba(255,255,255,.4);margin-top:4px">+998 78 555 65 75</p>
+      <div style="margin-top:10px;font-size:11px;background:rgba(59,130,246,.1);border-radius:6px;padding:5px 8px;color:#93c5fd">Filial №2</div>
+    </div>
+    <div class="card" style="border-color:rgba(34,197,94,.25);text-align:left">
+      <div style="font-size:24px;margin-bottom:12px">🏪</div>
+      <h3 style="color:#86efac;font-size:14px">Andijon filiali</h3>
+      <p style="font-size:12px;margin-top:6px">Mashrab ko'chasi, 7</p>
+      <p style="font-size:12px;color:rgba(255,255,255,.4);margin-top:4px">+998 78 555 65 75</p>
+      <div style="margin-top:10px;font-size:11px;background:rgba(59,130,246,.1);border-radius:6px;padding:5px 8px;color:#93c5fd">Filial №3</div>
+    </div>
+  </div>
+  <div class="anim-3" style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <span class="badge badge-green">📍 Har filial o'z manzili va aloqasi</span>
+    <span class="badge badge-teal">📦 Har filial o'z ombori</span>
+    <span class="badge badge-blue">↔️ Filiallar orasida tovar o'tkazish</span>
+    <span class="badge badge-amber">➕ Admin yangi filial qo'sha oladi</span>
+  </div>
+</div>
+
+<!-- ─── SLIDE 10: HISOBOT ─── -->
+<div class="slide bg-purple" data-slide="9">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.4)">📈 Tahlil</div>
+    <h2>Hisobot — Moliyaviy ko'rsatkichlar</h2>
+    <div class="divider" style="background:var(--purple)"></div>
+  </div>
+  <div class="anim-2" style="display:flex;gap:16px;width:100%;max-width:1050px">
+    <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+      <!-- Month filter -->
+      <div class="card" style="border-color:rgba(139,92,246,.3);padding:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;color:rgba(255,255,255,.5)">📅 Oy tanlash</span>
+          <div style="display:flex;gap:6px">
+            <span style="padding:5px 12px;border-radius:20px;background:rgba(139,92,246,.3);border:1px solid rgba(139,92,246,.5);font-size:12px;font-weight:600">Iyun 2026</span>
+            <span style="padding:5px 10px;border-radius:6px;background:rgba(255,255,255,.05);font-size:12px">‹</span>
+            <span style="padding:5px 10px;border-radius:6px;background:rgba(255,255,255,.05);font-size:12px">›</span>
+          </div>
+        </div>
+      </div>
+      <!-- Purchase table -->
+      <div class="card" style="border-color:rgba(59,130,246,.3);padding:14px">
+        <div style="font-size:12px;font-weight:700;color:#93c5fd;margin-bottom:10px">🛒 Filiallar bo'yicha xaridlar</div>
+        <table class="mock-table" style="font-size:12px">
+          <thead><tr><th>FILIAL</th><th>XARID SONI</th><th>JAMI SUMMA</th><th>ULUSH</th></tr></thead>
+          <tbody>
+            <tr><td>Drujba filiali</td><td>12</td><td style="color:#93c5fd;font-weight:700">4,200,000 so'm</td><td><div class="progress-bar"><div class="progress-fill" style="width:55%;background:var(--blue)"></div></div></td></tr>
+            <tr><td>Shahriston</td><td>8</td><td style="color:#93c5fd;font-weight:700">2,100,000 so'm</td><td><div class="progress-bar"><div class="progress-fill" style="width:28%;background:var(--blue)"></div></div></td></tr>
+            <tr><td>Buxoro</td><td>5</td><td style="color:#93c5fd;font-weight:700">1,295,000 so'm</td><td><div class="progress-bar"><div class="progress-fill" style="width:17%;background:var(--blue)"></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+      <!-- Cons table -->
+      <div class="card" style="border-color:rgba(239,68,68,.3);padding:14px">
+        <div style="font-size:12px;font-weight:700;color:#fca5a5;margin-bottom:10px">📤 Filiallar bo'yicha rasxodlar</div>
+        <table class="mock-table" style="font-size:12px">
+          <thead><tr><th>FILIAL</th><th>RASXOD SONI</th><th>JAMI NARX</th><th>ULUSH</th></tr></thead>
+          <tbody>
+            <tr><td>Drujba filiali</td><td>34</td><td style="color:#fca5a5;font-weight:700">3,100,000 so'm</td><td><div class="progress-bar"><div class="progress-fill" style="width:62%;background:var(--red)"></div></div></td></tr>
+            <tr><td>Shahriston</td><td>22</td><td style="color:#fca5a5;font-weight:700">1,200,000 so'm</td><td><div class="progress-bar"><div class="progress-fill" style="width:24%;background:var(--red)"></div></div></td></tr>
+            <tr><td>Buxoro</td><td>15</td><td style="color:#fca5a5;font-weight:700">700,000 so'm</td><td><div class="progress-bar"><div class="progress-fill" style="width:14%;background:var(--red)"></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card" style="border-color:rgba(139,92,246,.3);padding:14px">
+        <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:8px">Filial ustiga bosing →</div>
+        <div style="font-size:13px;line-height:1.6">📋 O'sha filialdagi <strong style="color:#c4b5fd">barcha rasxodlar ro'yxati</strong> ochiladi — sana, mahsulot, miqdor, narx bilan. Kunlik sarf yashil rang bilan belgilanadi.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SLIDE 11: REMINDER ─── -->
+<div class="slide bg-brand" data-slide="10">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(239,68,68,.2);color:#fca5a5;border:1px solid rgba(239,68,68,.4)">🔔 Xabarnomalar</div>
+    <h2>Reminder — Ogohlantirishlar tizimi</h2>
+    <div class="divider" style="background:var(--red)"></div>
+  </div>
+  <div class="anim-2" style="display:flex;gap:20px;width:100%;max-width:1000px">
+    <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+      <div class="card" style="border-color:rgba(245,158,11,.4);text-align:left">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <span style="font-size:32px">⚠️</span>
+          <div>
+            <h3 style="color:#fcd34d">Shoshilinch (≤ 2 kun)</h3>
+            <p style="font-size:12px">2 kun ichida tugaydigan tovarlar</p>
+          </div>
+        </div>
+        <div style="background:rgba(245,158,11,.1);border-radius:8px;padding:10px;font-size:13px">
+          Limon — 2 kg qoldi (2.0 kun)<br/>
+          Pomidor — 3 kg qoldi (0.6 kun)
+        </div>
+      </div>
+      <div class="card" style="border-color:rgba(239,68,68,.4);text-align:left">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <span style="font-size:32px">🚨</span>
+          <div>
+            <h3 style="color:#fca5a5">Tugadi (0 dona)</h3>
+            <p style="font-size:12px">Omborda qolmagan tovarlar</p>
+          </div>
+        </div>
+        <div style="background:rgba(239,68,68,.1);border-radius:8px;padding:10px;font-size:13px">
+          4 ta mahsulot tugadi — Ro'yxatni ko'rish uchun bosing →
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+      <div class="card" style="border-color:rgba(158,28,32,.4);text-align:left">
+        <div style="font-size:24px;margin-bottom:10px">🔔</div>
+        <h3 style="color:#fca5a5;margin-bottom:12px">Bell tizimi</h3>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <div>📊 Har 5 daqiqada ma'lumotlar yangilanadi</div>
+          <div style="color:#fcd34d">🔔 Yangi ogohlantirish kelsa → <strong>qo'ng'iroq jiringlaydi</strong></div>
+          <div>🔴 Yuqori o'ng burchakda <strong>qizil badge</strong></div>
+          <div>🔗 Bosganingizda umumiy ko'rinishga o'tadi</div>
+        </div>
+      </div>
+      <div class="card" style="border-color:rgba(13,148,136,.3);text-align:left;padding:16px">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4);margin-bottom:10px">📐 Hisob formulasi</div>
+        <div style="font-size:13px;line-height:1.9">
+          <div>Qolgan kun = <strong style="color:#5eead4">Ombor ÷ Kunlik sarf</strong></div>
+          <div style="color:rgba(255,255,255,.5);font-size:12px">Masalan: 10 kg ÷ 5 kg/kun = <strong>2 kun</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SLIDE 12: WORKFLOW ─── -->
+<div class="slide bg-dark" data-slide="11">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.3)">🔁 Jarayon</div>
+    <h2>To'liq ish jarayoni</h2>
+    <div class="divider" style="background:var(--blue)"></div>
+  </div>
+  <div class="anim-2 flow" style="max-width:1100px;flex-wrap:nowrap">
+    <div class="flow-step">
+      <div class="step-num" style="background:rgba(59,130,246,.2);color:#93c5fd">1</div>
+      <div style="font-size:24px;margin-bottom:8px">🛒</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Tovar xarid</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">Miqdor + narx + ta'minotchi kiritiladi. Ombor oshadi.</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="step-num" style="background:rgba(13,148,136,.2);color:#5eead4">2</div>
+      <div style="font-size:24px;margin-bottom:8px">📦</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Omborda saqlanadi</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">FIFO partiyalar bilan. Holat: yetarli / kam / tugadi.</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="step-num" style="background:rgba(245,158,11,.2);color:#fcd34d">3</div>
+      <div style="font-size:24px;margin-bottom:8px">⏰</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Kunlik avtosarf</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">Har kecha yarim tun. Ombor kamayadi, rasxodga yoziladi.</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="step-num" style="background:rgba(239,68,68,.2);color:#fca5a5">4</div>
+      <div style="font-size:24px;margin-bottom:8px">🔔</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Reminder</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">Kam qolsa ogohlantirish. Qo'ng'iroq jiringlaydi.</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="step-num" style="background:rgba(139,92,246,.2);color:#c4b5fd">5</div>
+      <div style="font-size:24px;margin-bottom:8px">📈</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Hisobot</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">Oy bo'yicha filiallar statistikasi, FIFO narxlar.</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step" style="border-color:rgba(34,197,94,.3)">
+      <div class="step-num" style="background:rgba(34,197,94,.2);color:#86efac">↺</div>
+      <div style="font-size:24px;margin-bottom:8px">🔄</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Yana xarid</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">Reminder ko'rganda yangi xarid kiritiladi. Doira tugaydi.</div>
+    </div>
+  </div>
+  <div class="anim-3" style="margin-top:24px">
+    <div class="card" style="display:inline-flex;gap:24px;padding:16px 32px;border-color:rgba(255,255,255,.1)">
+      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#93c5fd">4</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Filial</div></div>
+      <div style="width:1px;background:rgba(255,255,255,.1)"></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#5eead4">43+</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Mahsulot</div></div>
+      <div style="width:1px;background:rgba(255,255,255,.1)"></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#fcd34d">∞</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Operatsiyalar</div></div>
+      <div style="width:1px;background:rgba(255,255,255,.1)"></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#fca5a5">24/7</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Avtomatik</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SLIDE 13: FINAL ─── -->
+<div class="slide bg-brand" data-slide="12">
+  <div class="anim-1">
+    <div class="logo-ring">
+      <img class="logo-img" src="https://satashkent.uz/images/logo.jpg" onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\'font-size:40px;font-weight:900;color:#fff\'>S</div>'"/>
+    </div>
+  </div>
+  <div class="anim-2">
+    <h1 style="font-size:clamp(1.8rem,3vw,2.8rem)">SaTashkent Ta'minot Tizimi</h1>
+    <div class="divider" style="background:var(--brand)"></div>
+    <p class="lead" style="max-width:600px;margin:0 auto">Raqamli ombor boshqaruvi — bir joyda barcha filiallar,<br/>tovarlar va moliyaviy hisoblar</p>
+  </div>
+  <div class="anim-3" style="margin-top:32px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:700px">
+    <div class="card" style="padding:16px;border-color:rgba(158,28,32,.3)">
+      <div style="font-size:24px;margin-bottom:8px">📦</div>
+      <div style="font-size:13px;font-weight:600">Real-time ombor</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:4px">Har soniya dolzarb</div>
+    </div>
+    <div class="card" style="padding:16px;border-color:rgba(13,148,136,.3)">
+      <div style="font-size:24px;margin-bottom:8px">🤖</div>
+      <div style="font-size:13px;font-weight:600">Avtomatik sarf</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:4px">Qo'lda kiritish shart emas</div>
+    </div>
+    <div class="card" style="padding:16px;border-color:rgba(139,92,246,.3)">
+      <div style="font-size:24px;margin-bottom:8px">📊</div>
+      <div style="font-size:13px;font-weight:600">FIFO hisobot</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:4px">Aniq moliyaviy tahlil</div>
+    </div>
+  </div>
+  <div class="anim-4" style="margin-top:24px">
+    <div style="font-size:13px;color:rgba(255,255,255,.35)">localhost:8080 · Node.js + SQLite · satashkent26@gmail.com</div>
+  </div>
+</div>
+
+</div><!-- end deck -->
+
+<!-- Navigation -->
+<div class="nav-dots" id="nav-dots"></div>
+<div class="nav-arrows">
+  <button class="nav-btn" id="btn-prev" title="Orqaga (←)">‹</button>
+  <button class="nav-btn" id="btn-next" title="Oldinga (→)">›</button>
+</div>
+<div class="slide-num" id="slide-num"></div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const dotsEl = document.getElementById('nav-dots');
+const numEl  = document.getElementById('slide-num');
+let cur = 0;
+
+// Build dots
+slides.forEach((_,i) => {
+  const d = document.createElement('div');
+  d.className = 'nav-dot' + (i===0?' active':'');
+  d.onclick = () => goTo(i);
+  dotsEl.appendChild(d);
+});
+
+function goTo(n) {
+  if (n < 0 || n >= slides.length) return;
+  slides[cur].classList.remove('active');
+  slides[cur].classList.add('exit');
+  setTimeout(() => slides[cur-1 >= 0 ? cur : cur].classList.remove('exit'), 500);
+  // remove exit after transition
+  const prev = cur;
+  setTimeout(() => slides[prev].classList.remove('exit'), 520);
+  cur = n;
+  slides[cur].classList.add('active');
+  dotsEl.querySelectorAll('.nav-dot').forEach((d,i) => d.classList.toggle('active', i===cur));
+  numEl.textContent = `${cur+1} / ${slides.length}`;
+}
+
+document.getElementById('btn-prev').onclick = () => goTo(cur - 1);
+document.getElementById('btn-next').onclick = () => goTo(cur + 1);
+numEl.textContent = `1 / ${slides.length}`;
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); goTo(cur + 1); }
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp') { e.preventDefault(); goTo(cur - 1); }
+});
+
+// Touch swipe
+let tx = 0;
+document.addEventListener('touchstart', e => tx = e.touches[0].clientX, {passive:true});
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - tx;
+  if (Math.abs(dx) > 50) goTo(dx < 0 ? cur+1 : cur-1);
+}, {passive:true});
+</script>
+</body>
+</html>
