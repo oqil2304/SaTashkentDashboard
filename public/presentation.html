@@ -163,22 +163,17 @@ p{font-size:clamp(.85rem,1.2vw,1rem);line-height:1.6;color:rgba(255,255,255,.75)
 /* ── LOGO RING ── */
 @keyframes ringRotate{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 .logo-ring{
-  width:128px;height:128px;border-radius:50%;position:relative;
+  width:140px;height:140px;border-radius:50%;position:relative;
   margin:0 auto 24px;
+  background:linear-gradient(135deg,var(--brand),var(--brand-dark)) padding-box,
+             linear-gradient(0deg,#fff 0%,rgba(255,255,255,.15) 40%,rgba(255,255,255,.05) 100%) border-box;
+  border:3px solid transparent;
+  animation:ringRotate 3s linear infinite;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 40px rgba(158,28,32,.5);
 }
 .logo-img{
-  width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;
-  box-shadow:0 0 35px rgba(158,28,32,.45);
-}
-.logo-ring::before{
-  content:'';position:absolute;inset:-7px;border-radius:50%;
-  border:3px solid transparent;
-  border-top-color:#fff;border-right-color:rgba(255,255,255,.4);
-  animation:ringRotate 2.5s linear infinite;
-}
-.logo-ring::after{
-  content:'';position:absolute;inset:-7px;border-radius:50%;
-  border:3px solid rgba(255,255,255,.08);
+  width:126px;height:126px;border-radius:50%;object-fit:cover;display:block;
 }
 </style>
 </head>
@@ -890,6 +885,7 @@ p{font-size:clamp(.85rem,1.2vw,1rem);line-height:1.6;color:rgba(255,255,255,.75)
 <!-- Navigation -->
 <div class="nav-dots" id="nav-dots"></div>
 <div class="nav-arrows">
+  <button class="nav-btn" id="btn-fs" title="To'liq ekran (F)">⛶</button>
   <button class="nav-btn" id="btn-prev" title="Orqaga (←)">‹</button>
   <button class="nav-btn" id="btn-next" title="Oldinga (→)">›</button>
 </div>
@@ -927,9 +923,26 @@ document.getElementById('btn-prev').onclick = () => goTo(cur - 1);
 document.getElementById('btn-next').onclick = () => goTo(cur + 1);
 numEl.textContent = `1 / ${slides.length}`;
 
+// Fullscreen (F tugmasi yoki tugma orqali — ESC bilan chiqish ishlaydi)
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+    document.getElementById('btn-fs').textContent = '✕';
+  } else {
+    document.exitFullscreen().catch(() => {});
+    document.getElementById('btn-fs').textContent = '⛶';
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  document.getElementById('btn-fs').textContent = document.fullscreenElement ? '✕' : '⛶';
+});
+document.getElementById('btn-fs').onclick = toggleFullscreen;
+
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); goTo(cur + 1); }
   if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp') { e.preventDefault(); goTo(cur - 1); }
+  if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  // ESC fullscreen dan chiqish uchun brauzerga o'tkaziladi (preventDefault QILMAYMIZ)
 });
 
 // Touch swipe
