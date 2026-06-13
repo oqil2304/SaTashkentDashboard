@@ -163,15 +163,23 @@ p{font-size:clamp(.85rem,1.2vw,1rem);line-height:1.6;color:rgba(255,255,255,.75)
 /* ── LOGO RING ── */
 @keyframes ringRotate{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 .logo-ring{
-  width:120px;height:120px;border-radius:50%;
-  border:3px solid transparent;
-  background:linear-gradient(#0a0a0a,#0a0a0a) padding-box,
-             linear-gradient(45deg,var(--brand),transparent,var(--brand)) border-box;
-  animation:ringRotate 4s linear infinite;
-  display:flex;align-items:center;justify-content:center;
+  width:128px;height:128px;border-radius:50%;position:relative;
   margin:0 auto 24px;
 }
-.logo-img{width:90px;height:90px;border-radius:50%;object-fit:cover}
+.logo-img{
+  width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;
+  box-shadow:0 0 35px rgba(158,28,32,.45);
+}
+.logo-ring::before{
+  content:'';position:absolute;inset:-7px;border-radius:50%;
+  border:3px solid transparent;
+  border-top-color:#fff;border-right-color:rgba(255,255,255,.4);
+  animation:ringRotate 2.5s linear infinite;
+}
+.logo-ring::after{
+  content:'';position:absolute;inset:-7px;border-radius:50%;
+  border:3px solid rgba(255,255,255,.08);
+}
 </style>
 </head>
 <body>
@@ -201,8 +209,71 @@ p{font-size:clamp(.85rem,1.2vw,1rem);line-height:1.6;color:rgba(255,255,255,.75)
   </div>
 </div>
 
+<!-- ─── SLIDE 12: WORKFLOW ─── -->
+<div class="slide bg-blue" data-slide="1">
+  <div class="anim-1">
+    <div class="tag" style="background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.3)">🔁 Umumiy jarayon</div>
+    <h2>Tizim qanday ishlaydi — to'liq jarayon</h2>
+    <div class="divider" style="background:var(--blue)"></div>
+  </div>
+  <div class="anim-2 flow" style="max-width:1100px;flex-wrap:nowrap">
+    <div class="flow-step">
+      <div class="step-num" style="background:rgba(59,130,246,.2);color:#93c5fd">1</div>
+      <div style="font-size:24px;margin-bottom:8px">🛒</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Tovar xarid</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">Miqdor + narx + ta'minotchi kiritiladi. Ombor oshadi.</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="step-num" style="background:rgba(13,148,136,.2);color:#5eead4">2</div>
+      <div style="font-size:24px;margin-bottom:8px">📦</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Omborda saqlanadi</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">FIFO partiyalar bilan. Holat: yetarli / kam / tugadi.</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="step-num" style="background:rgba(245,158,11,.2);color:#fcd34d">3</div>
+      <div style="font-size:24px;margin-bottom:8px">⏰</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Kunlik avtosarf</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">Har kecha yarim tun. Ombor kamayadi, rasxodga yoziladi.</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="step-num" style="background:rgba(239,68,68,.2);color:#fca5a5">4</div>
+      <div style="font-size:24px;margin-bottom:8px">🔔</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Reminder</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">Kam qolsa ogohlantirish. Qo'ng'iroq jiringlaydi.</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">
+      <div class="step-num" style="background:rgba(139,92,246,.2);color:#c4b5fd">5</div>
+      <div style="font-size:24px;margin-bottom:8px">📈</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Hisobot</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">Oy bo'yicha filiallar statistikasi, FIFO narxlar.</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step" style="border-color:rgba(34,197,94,.3)">
+      <div class="step-num" style="background:rgba(34,197,94,.2);color:#86efac">↺</div>
+      <div style="font-size:24px;margin-bottom:8px">🔄</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Yana xarid</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5)">Reminder ko'rganda yangi xarid kiritiladi. Doira tugaydi.</div>
+    </div>
+  </div>
+  <div class="anim-3" style="margin-top:24px">
+    <div class="card" style="display:inline-flex;gap:24px;padding:16px 32px;border-color:rgba(255,255,255,.1)">
+      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#93c5fd">4</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Filial</div></div>
+      <div style="width:1px;background:rgba(255,255,255,.1)"></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#5eead4">43+</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Mahsulot</div></div>
+      <div style="width:1px;background:rgba(255,255,255,.1)"></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#fcd34d">∞</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Operatsiyalar</div></div>
+      <div style="width:1px;background:rgba(255,255,255,.1)"></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#fca5a5">24/7</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Avtomatik</div></div>
+    </div>
+  </div>
+</div>
+
 <!-- ─── SLIDE 2: TIZIM QANDAY ISHLAYDI ─── -->
-<div class="slide bg-dark" data-slide="1">
+<div class="slide bg-dark" data-slide="2">
   <div class="anim-1">
     <div class="tag" style="background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.3)">Tizim arxitekturasi</div>
     <h2>Tizim qanday ishlaydi?</h2>
@@ -258,58 +329,6 @@ p{font-size:clamp(.85rem,1.2vw,1rem);line-height:1.6;color:rgba(255,255,255,.75)
           <div style="padding:7px 10px;background:rgba(139,92,246,.1);border-radius:8px;border:1px solid rgba(139,92,246,.2)">settings</div>
         </div>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- ─── SLIDE 3: FOYDALANUVCHILAR VA ROLLAR ─── -->
-<div class="slide bg-purple" data-slide="2">
-  <div class="anim-1">
-    <div class="tag" style="background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.4)">👥 Foydalanuvchilar</div>
-    <h2>Uch xil rol — uch xil huquq</h2>
-    <div class="divider" style="background:var(--purple)"></div>
-  </div>
-  <div class="card-grid cols3 anim-2" style="max-width:950px">
-    <!-- Admin -->
-    <div class="card" style="border-color:rgba(245,158,11,.4);text-align:left">
-      <div class="icon-box" style="background:rgba(245,158,11,.15);font-size:28px">👑</div>
-      <h3 style="color:#fcd34d;margin-bottom:12px">Administrator</h3>
-      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Barcha bo'limlar</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Foydalanuvchilar boshqaruvi</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Xarid, rasxod, filial</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Hisobotlar va statistika</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Tovarlarni o'chirish</div>
-      </div>
-    </div>
-    <!-- Branch -->
-    <div class="card" style="border-color:rgba(59,130,246,.4);text-align:left">
-      <div class="icon-box" style="background:rgba(59,130,246,.15);font-size:28px">🏪</div>
-      <h3 style="color:#93c5fd;margin-bottom:12px">Filial omborchisi</h3>
-      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#93c5fd;font-size:16px">✓</span>O'z filiali ma'lumotlari</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#93c5fd;font-size:16px">✓</span>Ombor ko'rish va kiritish</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#93c5fd;font-size:16px">✓</span>Xarid va rasxod qo'shish</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Boshqa filiallar</span></div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Foydalanuvchi boshqaruv</span></div>
-      </div>
-    </div>
-    <!-- Viewer -->
-    <div class="card" style="border-color:rgba(100,116,139,.4);text-align:left">
-      <div class="icon-box" style="background:rgba(100,116,139,.15);font-size:28px">👁️</div>
-      <h3 style="color:#94a3b8;margin-bottom:12px">Kuzatuvchi (Viewer)</h3>
-      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#94a3b8;font-size:16px">✓</span>Barcha ma'lumotlarni ko'rish</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#94a3b8;font-size:16px">✓</span>Hisobot va statistika</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Yozish, o'chirish yo'q</span></div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Foydalanuvchi boshqaruv</span></div>
-      </div>
-    </div>
-  </div>
-  <div class="anim-3" style="margin-top:20px">
-    <div class="card" style="display:inline-flex;gap:20px;align-items:center;padding:14px 28px">
-      <span style="font-size:13px;color:rgba(255,255,255,.5)">🔐 Kirish:</span>
-      <span style="font-size:13px">Login + parol → <strong style="color:#c4b5fd">JWT token</strong> (HttpOnly cookie) → har bir API so'rovda tekshiriladi</span>
     </div>
   </div>
 </div>
@@ -780,65 +799,54 @@ p{font-size:clamp(.85rem,1.2vw,1rem);line-height:1.6;color:rgba(255,255,255,.75)
   </div>
 </div>
 
-<!-- ─── SLIDE 12: WORKFLOW ─── -->
-<div class="slide bg-dark" data-slide="11">
+<!-- ─── SLIDE 3: FOYDALANUVCHILAR VA ROLLAR ─── -->
+<div class="slide bg-purple" data-slide="11">
   <div class="anim-1">
-    <div class="tag" style="background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.3)">🔁 Jarayon</div>
-    <h2>To'liq ish jarayoni</h2>
-    <div class="divider" style="background:var(--blue)"></div>
+    <div class="tag" style="background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.4)">👥 Foydalanuvchilar</div>
+    <h2>Uch xil rol — uch xil huquq</h2>
+    <div class="divider" style="background:var(--purple)"></div>
   </div>
-  <div class="anim-2 flow" style="max-width:1100px;flex-wrap:nowrap">
-    <div class="flow-step">
-      <div class="step-num" style="background:rgba(59,130,246,.2);color:#93c5fd">1</div>
-      <div style="font-size:24px;margin-bottom:8px">🛒</div>
-      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Tovar xarid</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.5)">Miqdor + narx + ta'minotchi kiritiladi. Ombor oshadi.</div>
+  <div class="card-grid cols3 anim-2" style="max-width:950px">
+    <!-- Admin -->
+    <div class="card" style="border-color:rgba(245,158,11,.4);text-align:left">
+      <div class="icon-box" style="background:rgba(245,158,11,.15);font-size:28px">👑</div>
+      <h3 style="color:#fcd34d;margin-bottom:12px">Administrator</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Barcha bo'limlar</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Foydalanuvchilar boshqaruvi</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Xarid, rasxod, filial</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Hisobotlar va statistika</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#fcd34d;font-size:16px">✓</span>Tovarlarni o'chirish</div>
+      </div>
     </div>
-    <div class="flow-arrow">→</div>
-    <div class="flow-step">
-      <div class="step-num" style="background:rgba(13,148,136,.2);color:#5eead4">2</div>
-      <div style="font-size:24px;margin-bottom:8px">📦</div>
-      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Omborda saqlanadi</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.5)">FIFO partiyalar bilan. Holat: yetarli / kam / tugadi.</div>
+    <!-- Branch -->
+    <div class="card" style="border-color:rgba(59,130,246,.4);text-align:left">
+      <div class="icon-box" style="background:rgba(59,130,246,.15);font-size:28px">🏪</div>
+      <h3 style="color:#93c5fd;margin-bottom:12px">Filial omborchisi</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#93c5fd;font-size:16px">✓</span>O'z filiali ma'lumotlari</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#93c5fd;font-size:16px">✓</span>Ombor ko'rish va kiritish</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#93c5fd;font-size:16px">✓</span>Xarid va rasxod qo'shish</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Boshqa filiallar</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Foydalanuvchi boshqaruv</span></div>
+      </div>
     </div>
-    <div class="flow-arrow">→</div>
-    <div class="flow-step">
-      <div class="step-num" style="background:rgba(245,158,11,.2);color:#fcd34d">3</div>
-      <div style="font-size:24px;margin-bottom:8px">⏰</div>
-      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Kunlik avtosarf</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.5)">Har kecha yarim tun. Ombor kamayadi, rasxodga yoziladi.</div>
-    </div>
-    <div class="flow-arrow">→</div>
-    <div class="flow-step">
-      <div class="step-num" style="background:rgba(239,68,68,.2);color:#fca5a5">4</div>
-      <div style="font-size:24px;margin-bottom:8px">🔔</div>
-      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Reminder</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.5)">Kam qolsa ogohlantirish. Qo'ng'iroq jiringlaydi.</div>
-    </div>
-    <div class="flow-arrow">→</div>
-    <div class="flow-step">
-      <div class="step-num" style="background:rgba(139,92,246,.2);color:#c4b5fd">5</div>
-      <div style="font-size:24px;margin-bottom:8px">📈</div>
-      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Hisobot</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.5)">Oy bo'yicha filiallar statistikasi, FIFO narxlar.</div>
-    </div>
-    <div class="flow-arrow">→</div>
-    <div class="flow-step" style="border-color:rgba(34,197,94,.3)">
-      <div class="step-num" style="background:rgba(34,197,94,.2);color:#86efac">↺</div>
-      <div style="font-size:24px;margin-bottom:8px">🔄</div>
-      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Yana xarid</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.5)">Reminder ko'rganda yangi xarid kiritiladi. Doira tugaydi.</div>
+    <!-- Viewer -->
+    <div class="card" style="border-color:rgba(100,116,139,.4);text-align:left">
+      <div class="icon-box" style="background:rgba(100,116,139,.15);font-size:28px">👁️</div>
+      <h3 style="color:#94a3b8;margin-bottom:12px">Kuzatuvchi (Viewer)</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#94a3b8;font-size:16px">✓</span>Barcha ma'lumotlarni ko'rish</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:#94a3b8;font-size:16px">✓</span>Hisobot va statistika</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Yozish, o'chirish yo'q</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="color:rgba(255,255,255,.3);font-size:16px">✗</span><span style="color:rgba(255,255,255,.4)">Foydalanuvchi boshqaruv</span></div>
+      </div>
     </div>
   </div>
-  <div class="anim-3" style="margin-top:24px">
-    <div class="card" style="display:inline-flex;gap:24px;padding:16px 32px;border-color:rgba(255,255,255,.1)">
-      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#93c5fd">4</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Filial</div></div>
-      <div style="width:1px;background:rgba(255,255,255,.1)"></div>
-      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#5eead4">43+</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Mahsulot</div></div>
-      <div style="width:1px;background:rgba(255,255,255,.1)"></div>
-      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#fcd34d">∞</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Operatsiyalar</div></div>
-      <div style="width:1px;background:rgba(255,255,255,.1)"></div>
-      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:#fca5a5">24/7</div><div style="font-size:11px;color:rgba(255,255,255,.4)">Avtomatik</div></div>
+  <div class="anim-3" style="margin-top:20px">
+    <div class="card" style="display:inline-flex;gap:20px;align-items:center;padding:14px 28px">
+      <span style="font-size:13px;color:rgba(255,255,255,.5)">🔐 Kirish:</span>
+      <span style="font-size:13px">Login + parol → <strong style="color:#c4b5fd">JWT token</strong> (HttpOnly cookie) → har bir API so'rovda tekshiriladi</span>
     </div>
   </div>
 </div>
