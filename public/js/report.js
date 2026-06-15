@@ -16,9 +16,12 @@ function renderReport(c) {
   c.innerHTML = `
     <div class="section-header">
       <div class="section-title">Oylik hisobot</div>
-      <div style="display:flex;gap:10px;align-items:center">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <select class="form-select" id="rep-month" onchange="applyReport()" style="min-width:130px;font-weight:600">${monthOpts}</select>
         <select class="form-select" id="rep-year"  onchange="applyReport()" style="min-width:90px;font-weight:600">${yearOpts}</select>
+        <button class="btn btn-secondary" onclick="exportReportExcel()" title="Excel yuklab olish">
+          <i class="ti ti-file-spreadsheet"></i>Excel
+        </button>
       </div>
     </div>
     <div id="report-body"></div>`;
@@ -167,6 +170,98 @@ function openReportPurchDetail(branchId) {
       <tbody>${rows}</tbody>
     </table></div></div>`;
   paintIcons(c);
+}
+
+// ── Excel export ──────────────────────────────────────────────────────────────
+function exportReportExcel() {
+  if (typeof XLSX === 'undefined') { toast('Excel kutubxonasi yuklanmadi', 'error'); return; }
+
+  const month = parseInt(document.getElementById('rep-month')?.value || new Date().getMonth() + 1);
+  const year  = parseInt(document.getElementById('rep-year')?.value  || new Date().getFullYear());
+  const ym    = `${year}-${String(month).padStart(2, '0')}`;
+  const UZ_MONTHS = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
+  const mLabel = `${UZ_MONTHS[month - 1]} ${year}`;
+
+  const monthPurchases    = purchases.filter(p => (p.purchase_date || '').startsWith(ym));
+  const monthConsumptions = consumptions.filter(co => (co.consume_date || '').startsWith(ym));
+  const totalSpend = monthPurchases.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
+
+  // 1-varaq: Umumiy xulosa
+  const summaryData = [
+    ['SaTashkent Ta\'minot Bo\'limi — Oylik hisobot', '', '', ''],
+    ['Davr:', mLabel, '', ''],
+    ['Eksport sanasi:', new Date().toLocaleDateString('uz-UZ'), '', ''],
+    [],
+    ['Ko\'rsatkich', 'Qiymat'],
+    ['Faol filiallar', branches.filter(b => monthPurchases.some(p => p.branch_id == b.id)).length],
+    ['Jami sotib olishlar (ta)', monthPurchases.length],
+    ['Jami rasxodlar (ta)', monthConsumptions.length],
+    ['Jami xarajat (so\'m)', totalSpend],
+    [],
+    ['Filiallar bo\'yicha sotib olishlar xarajati'],
+    ['Filial', 'Sotib olishlar soni', 'Jami xarajat (so\'m)', 'Ulush (%)'],
+    ...branches.map(b => {
+      const bPurch = monthPurchases.filter(p => p.branch_id == b.id);
+      const amt = bPurch.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
+      const pct = totalSpend > 0 ? +(amt / totalSpend * 100).toFixed(1) : 0;
+      return [b.name, bPurch.length, amt, pct];
+    })
+  ];
+
+  // 2-varaq: Sotib olishlar
+  const purchData = [
+    ['Sana', 'Mahsulot', 'Filial', 'Miqdor', 'Birlik', 'Birlik narxi (so\'m)', 'Jami (so\'m)', 'Yetkazuvchi', 'Izoh'],
+    ...monthPurchases.map(p => [
+      p.purchase_date || '',
+      p.product_name || '',
+      p.branch_name || '',
+      p.quantity || 0,
+      p.unit || '',
+      p.unit_price || 0,
+      (p.quantity || 0) * (p.unit_price || 0),
+      p.supplier || '',
+      p.note || ''
+    ]),
+    [],
+    ['', '', '', '', '', 'JAMI:', totalSpend, '', '']
+  ];
+
+  // 3-varaq: Rasxodlar
+  const totalCost = monthConsumptions.reduce((s, co) => s + (co.quantity || 0) * (co.unit_price || 0), 0);
+  const consData = [
+    ['Sana', 'Mahsulot', 'Filial (ombor)', 'Foydalanuvchi filial', 'Miqdor', 'Birlik', 'Birlik narxi (so\'m)', 'Jami (so\'m)', 'Izoh'],
+    ...monthConsumptions.map(co => [
+      co.consume_date || '',
+      co.product_name || '',
+      co.from_branch_name || '',
+      co.to_branch_name || '',
+      co.quantity || 0,
+      co.unit || '',
+      co.unit_price || 0,
+      (co.quantity || 0) * (co.unit_price || 0),
+      co.note === 'auto_daily' ? 'Kunlik sarf' : (co.note || '')
+    ]),
+    [],
+    ['', '', '', '', '', '', 'JAMI:', totalCost, '']
+  ];
+
+  const wb = XLSX.utils.book_new();
+
+  const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+  ws1['!cols'] = [{ wch: 35 }, { wch: 22 }, { wch: 22 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Xulosa');
+
+  const ws2 = XLSX.utils.aoa_to_sheet(purchData);
+  ws2['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 10 }, { wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Sotib olishlar');
+
+  const ws3 = XLSX.utils.aoa_to_sheet(consData);
+  ws3['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 10 }, { wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 22 }];
+  XLSX.utils.book_append_sheet(wb, ws3, 'Rasxodlar');
+
+  const fname = `SaTashkent_Hisobot_${ym}.xlsx`;
+  XLSX.writeFile(wb, fname);
+  toast(`✅ ${fname} yuklab olindi`);
 }
 
 // Filial rasxodlari detail sahifasi
