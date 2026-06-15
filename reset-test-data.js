@@ -37,6 +37,12 @@ const DB_FILE = path.join(__dirname, 'data', 'dashboard.db');
   // AUTOINCREMENT hisoblagichlarini nolga qaytarish (id qaytadan 1 dan boshlanadi)
   try { db.run("DELETE FROM sqlite_sequence WHERE name IN ('products','purchases','consumptions','supply_orders')"); } catch {}
 
+  // Test mahsulotlari qayta qo'shilmasligi uchun seed bayrog'ini o'rnatamiz
+  try {
+    db.run("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
+    db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('demo_seeded','1')");
+  } catch (e) { console.log('  (bayroq o\'rnatishda xato:', e.message, ')'); }
+
   fs.writeFileSync(DB_FILE, Buffer.from(db.export()));
 
   console.log('── O\'chirildi ✅ ──');

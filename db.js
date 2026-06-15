@@ -177,8 +177,18 @@ async function seedData() {
 }
 
 async function seedMoreProducts() {
+  // Bir martalik bayroq — seed bir marta ishlasa, qayta hech qachon ishlamaydi.
+  // (Foydalanuvchi bazani tozalagandan keyin test mahsulotlari qaytib kelmasligi uchun)
+  const seeded = await db.get2("SELECT value FROM settings WHERE key='demo_seeded'");
+  if (seeded) return;
+
   const row = await db.get2('SELECT COUNT(*) as cnt FROM products');
-  if (row && row.cnt >= 35) return;
+  if (row && row.cnt >= 35) {
+    // Allaqachon to'la — bayroqni o'rnatib chiqamiz
+    await db.run2("INSERT OR REPLACE INTO settings (key,value) VALUES ('demo_seeded','1')");
+    saveDb();
+    return;
+  }
 
   // Filiallarni topamiz
   const branchRows = await db.all2('SELECT id, name FROM branches ORDER BY id');
@@ -261,6 +271,8 @@ async function seedMoreProducts() {
     );
   }
 
+  await db.run2("INSERT OR REPLACE INTO settings (key,value) VALUES ('demo_seeded','1')");
+  saveDb();
   console.log(`✅ Qo'shimcha ${extraProducts.length} ta mahsulot va ${extraPurchases.length} ta xarid qo'shildi`);
 }
 
