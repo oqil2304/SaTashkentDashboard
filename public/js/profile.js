@@ -53,12 +53,21 @@ function renderProfile(c) {
 
         <div style="font-weight:700;font-size:15px;margin-bottom:16px"><i class="ti ti-key" style="vertical-align:-3px;margin-right:6px"></i>Parolni o'zgartirish</div>
         <div class="form-group"><label class="form-label">Joriy parol</label>
-          <input class="form-control" type="password" id="pf-curpass" placeholder="••••••••"></div>
+          <div style="position:relative">
+            <input class="form-control" type="password" id="pf-curpass" placeholder="••••••••" style="padding-right:42px">
+            <button type="button" onclick="pfEye('pf-curpass',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af;font-size:17px;display:flex;align-items:center;padding:4px" tabindex="-1"><i class="ti ti-eye"></i></button>
+          </div></div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Yangi parol</label>
-            <input class="form-control" type="password" id="pf-newpass" placeholder="••••••••"></div>
+            <div style="position:relative">
+              <input class="form-control" type="password" id="pf-newpass" placeholder="••••••••" style="padding-right:42px">
+              <button type="button" onclick="pfEye('pf-newpass',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af;font-size:17px;display:flex;align-items:center;padding:4px" tabindex="-1"><i class="ti ti-eye"></i></button>
+            </div></div>
           <div class="form-group"><label class="form-label">Yangi parolni takror</label>
-            <input class="form-control" type="password" id="pf-newpass2" placeholder="••••••••"></div>
+            <div style="position:relative">
+              <input class="form-control" type="password" id="pf-newpass2" placeholder="••••••••" style="padding-right:42px">
+              <button type="button" onclick="pfEye('pf-newpass2',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af;font-size:17px;display:flex;align-items:center;padding:4px" tabindex="-1"><i class="ti ti-eye"></i></button>
+            </div></div>
         </div>
         <div style="display:flex;justify-content:flex-end;margin-top:6px">
           <button class="btn btn-primary" onclick="saveProfilePassword()"><i class="ti ti-key"></i>Parolni yangilash</button>
@@ -100,6 +109,14 @@ async function saveProfileInfo() {
     toast('Maʼlumotlar saqlandi');
     renderSection('profile');
   } catch (e) { toast(e.message, 'error'); }
+}
+
+function pfEye(id, btn) {
+  const inp = document.getElementById(id);
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.innerHTML = show ? '<i class="ti ti-eye-off"></i>' : '<i class="ti ti-eye"></i>';
+  paintIcons(btn);
 }
 
 async function saveProfilePassword() {

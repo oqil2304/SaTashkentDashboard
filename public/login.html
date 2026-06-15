@@ -57,6 +57,13 @@
     .form-group { margin-bottom: 16px; }
     .form-label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 7px; }
     .input-wrap { position: relative; }
+    .eye-btn {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer; color: #9ca3af;
+      padding: 4px; display: flex; align-items: center; font-size: 17px;
+      transition: color .2s;
+    }
+    .eye-btn:hover { color: #6b7280; }
     .input-icon {
       position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
       color: #9ca3af; pointer-events: none; display: flex; align-items: center;
@@ -137,6 +144,7 @@
           <div class="input-wrap">
             <i class="ti ti-lock input-icon"></i>
             <input class="form-input" type="password" id="l-password" placeholder="••••••••" autocomplete="current-password" required />
+            <button type="button" class="eye-btn" onclick="toggleEye('l-password',this)" tabindex="-1"><i class="ti ti-eye"></i></button>
           </div>
         </div>
         <button class="btn" type="submit">Kirish</button>
@@ -182,6 +190,7 @@
           <div class="input-wrap">
             <i class="ti ti-lock input-icon"></i>
             <input class="form-input" type="password" id="r-password" placeholder="••••••••" autocomplete="new-password" required />
+            <button type="button" class="eye-btn" onclick="toggleEye('r-password',this)" tabindex="-1"><i class="ti ti-eye"></i></button>
           </div>
         </div>
         <button class="btn" type="submit">Akkaunt yaratish</button>
@@ -221,6 +230,7 @@
           <div class="input-wrap">
             <i class="ti ti-lock input-icon"></i>
             <input class="form-input" type="password" id="rs-password" placeholder="••••••••" autocomplete="new-password" required />
+            <button type="button" class="eye-btn" onclick="toggleEye('rs-password',this)" tabindex="-1"><i class="ti ti-eye"></i></button>
           </div>
         </div>
         <button class="btn" type="submit">Parolni yangilash</button>
@@ -330,6 +340,14 @@
       }
       btn.disabled = false; btn.textContent = 'Parolni yangilash';
     });
+
+    function toggleEye(id, btn) {
+      const inp = document.getElementById(id);
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      btn.innerHTML = show ? '<i class="ti ti-eye-off"></i>' : '<i class="ti ti-eye"></i>';
+      paintIcons(btn);
+    }
   </script>
 </body>
 </html>
