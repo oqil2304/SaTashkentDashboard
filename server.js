@@ -7,7 +7,7 @@ const path         = require('path');
 const fs           = require('fs');
 const multer       = require('multer');
 const { db, init, saveDb } = require('./db');
-const { startBot, notifyLowStock, completeOrder, sendToSupplier, getBotUsername } = require('./bot');
+const { startBot, notifyLowStock, autoCheckUrgent, completeOrder, sendToSupplier, getBotUsername } = require('./bot');
 
 // Avatar upload konfiguratsiyasi
 const avatarStorage = multer.diskStorage({
@@ -431,6 +431,8 @@ app.post('/api/consumptions', auth, canWrite, async (req, res) => {
     const ids = await fifoConsume(product_id, quantity, to_branch_id, consume_date || new Date().toISOString().split('T')[0], note || '');
     const rows = await Promise.all(ids.map(id => db.get2(CONS_SELECT + ' WHERE co.id=?', [id])));
     res.status(201).json(rows[0]); // birinchi yozuvni qaytaramiz (UI uchun)
+    // Rasxoddan keyin ombor kamaygan bo'lishi mumkin — shoshilinch/tugaganlarni tekshirish
+    if (typeof autoCheckUrgent === 'function') autoCheckUrgent().catch(() => {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.delete('/api/consumptions/:id', auth, canWrite, async (req, res) => {
@@ -710,6 +712,8 @@ function scheduleDailyConsumption() {
     const todayStr = new Date().toISOString().split('T')[0];
     await runDailyConsumption(todayStr);
     await db.run2("INSERT OR REPLACE INTO settings (key,value) VALUES ('last_daily_run',?)", [todayStr]);
+    // Kunlik sarfdan keyin shoshilinch/tugagan tovarlarni avtomatik tekshirish
+    if (typeof autoCheckUrgent === 'function') autoCheckUrgent().catch(() => {});
     setTimeout(tick, msUntilMidnight());
   }, msUntilMidnight());
 }

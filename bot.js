@@ -163,6 +163,14 @@ async function notifyLowStock(forceCheck = false) {
     if (forceCheck) await sendMessage(ADMIN_CHAT_ID, '✅ Barcha tovarlar yetarli! Buyurtma kerak emas.');
     return;
   }
+  const items = buildGroupedItems(prods);
+  const msg = await sendMessage(ADMIN_CHAT_ID, buildApprovalText(items), { reply_markup: buildApprovalKeyboard(items) });
+  if (msg) approvalSessions.set(msg.message_id, { items, chat_id: ADMIN_CHAT_ID });
+  console.log(`[bot] Admin ga ${items.length} ta guruh (${prods.length} ta tovar) ro'yxati yuborildi`);
+}
+
+// Bir xil nomli mahsulotlarni (sintaksisi boshqacha) bitta guruhga jamlash
+function buildGroupedItems(prods) {
   const raw = prods.map(p => ({
     product_id: p.id, name: p.name, unit: p.unit || '', qty: qtyForOrder(p),
     stock: p.current_stock || 0,
@@ -170,8 +178,6 @@ async function notifyLowStock(forceCheck = false) {
     supplier_id: p.supplier_id || null, supplier_name: p.supplier_name || null,
     supplier_chat_id: p.supplier_chat_id || null
   }));
-
-  // Bir xil nomli mahsulotlarni (sintaksisi boshqacha) bitta guruhga jamlash
   const groups = new Map();
   for (const it of raw) {
     const key = normName(it.name);
@@ -190,11 +196,41 @@ async function notifyLowStock(forceCheck = false) {
       g.supplier_id = it.supplier_id; g.supplier_name = it.supplier_name; g.supplier_chat_id = it.supplier_chat_id;
     }
   }
-  const items = [...groups.values()];
+  return [...groups.values()];
+}
 
-  const msg = await sendMessage(ADMIN_CHAT_ID, buildApprovalText(items), { reply_markup: buildApprovalKeyboard(items) });
-  if (msg) approvalSessions.set(msg.message_id, { items, chat_id: ADMIN_CHAT_ID });
-  console.log(`[bot] Admin ga ${items.length} ta guruh (${prods.length} ta tovar) ro'yxati yuborildi`);
+// Ochiq approval sessiyalarida allaqachon turgan mahsulot id'lari (takror yubormaslik uchun)
+function _productsInOpenSessions() {
+  const ids = new Set();
+  for (const sess of approvalSessions.values())
+    for (const it of (sess.items || []))
+      (it.members || []).forEach(m => m.product_id && ids.add(m.product_id));
+  return ids;
+}
+
+// ── Avtomatik tekshiruv — tugagan + shoshilinch (≤2 kun) tovarlarni adminga yuborish ─
+async function autoCheckUrgent() {
+  if (!API || !ADMIN_CHAT_ID) return;
+  try {
+    const prods = await getLowStockProducts();
+    // faqat tugagan (stock<=0) yoki shoshilinch (≤2 kun qolgan)
+    const urgent = prods.filter(p =>
+      (p.current_stock || 0) <= 0 ||
+      (p.daily_usage > 0 && (p.current_stock / p.daily_usage) <= 2)
+    );
+    if (!urgent.length) return;
+    // Allaqachon ochiq tasdiqlash xabarida turganlarni o'tkazib yuborish
+    const inSession = _productsInOpenSessions();
+    const fresh = urgent.filter(p => !inSession.has(p.id));
+    if (!fresh.length) return;
+    const items = buildGroupedItems(fresh);
+    const msg = await sendMessage(ADMIN_CHAT_ID,
+      `🔔 <b>Avtomatik ogohlantirish</b> — shoshilinch / tugagan tovarlar:\n\n` +
+      buildApprovalText(items).replace(/^📋 <b>.*<\/b>\n\n/, ''),
+      { reply_markup: buildApprovalKeyboard(items) });
+    if (msg) approvalSessions.set(msg.message_id, { items, chat_id: ADMIN_CHAT_ID });
+    console.log(`[bot] Avto-tekshiruv: ${fresh.length} ta shoshilinch/tugagan tovar adminga yuborildi`);
+  } catch (e) { console.error('[bot] autoCheckUrgent xatosi:', e.message); }
 }
 
 // ── Ta'minotchiga xabar ─────────────────────────────────────────────────────
@@ -677,6 +713,11 @@ async function startBot() {
   _offset = 0; // navbatdagi xabarlardan boshlab o'qiymiz (birinchi /start ni o'tkazib yubormaslik)
   pollLoop();
   console.log(`[bot] ✅ Bot ishga tushdi: @${me.username} (long polling)`);
+
+  // Avtomatik tekshiruv: startdan biroz keyin + har soatda bir marta
+  const AUTO_CHECK_MS = 60 * 60 * 1000;
+  setTimeout(autoCheckUrgent, 15000);
+  setInterval(autoCheckUrgent, AUTO_CHECK_MS);
 }
 
-module.exports = { startBot, notifyLowStock, completeOrder, sendToSupplier, getBotUsername: () => _botUsername };
+module.exports = { startBot, notifyLowStock, autoCheckUrgent, completeOrder, sendToSupplier, getBotUsername: () => _botUsername };
