@@ -496,22 +496,28 @@ app.get('/api/report', auth, async (req, res) => {
 });
 
 // ── Ta'minotchilar API ────────────────────────────────────────────────────
+// branch_ids ni normallashtirish: massiv yoki "1,2,3" → "1,2,3" satr
+function normBranchIds(v) {
+  if (Array.isArray(v)) return v.filter(Boolean).join(',');
+  if (v == null) return '';
+  return String(v).split(',').map(x => x.trim()).filter(Boolean).join(',');
+}
+
 app.get('/api/suppliers', auth, async (req, res) => {
   try {
-    res.json(await db.all2(
-      `SELECT s.*, b.name AS branch_name FROM suppliers s LEFT JOIN branches b ON b.id=s.branch_id ORDER BY s.name`
-    ));
+    res.json(await db.all2(`SELECT * FROM suppliers ORDER BY name`));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/suppliers', auth, adminOnly, async (req, res) => {
   try {
-    const { name, telegram_chat_id, telegram_username, phone, products_note, note, branch_id } = req.body;
+    const { name, telegram_chat_id, telegram_username, phone, products_note, note, branch_ids } = req.body;
     if (!name) return res.status(400).json({ error: 'Ism kerak' });
+    const bids = normBranchIds(branch_ids);
     const r = await db.run2(
-      `INSERT INTO suppliers (name, telegram_chat_id, telegram_username, phone, products_note, note, branch_id, created_at)
+      `INSERT INTO suppliers (name, telegram_chat_id, telegram_username, phone, products_note, note, branch_ids, created_at)
        VALUES (?,?,?,?,?,?,?,datetime('now'))`,
-      [name, telegram_chat_id || '', telegram_username || '', phone || '', products_note || '', note || '', branch_id || null]
+      [name, telegram_chat_id || '', telegram_username || '', phone || '', products_note || '', note || '', bids]
     );
     saveDb();
     res.json({ id: r.lastID });
@@ -520,10 +526,11 @@ app.post('/api/suppliers', auth, adminOnly, async (req, res) => {
 
 app.put('/api/suppliers/:id', auth, adminOnly, async (req, res) => {
   try {
-    const { name, telegram_chat_id, telegram_username, phone, products_note, note, branch_id } = req.body;
+    const { name, telegram_chat_id, telegram_username, phone, products_note, note, branch_ids } = req.body;
+    const bids = normBranchIds(branch_ids);
     await db.run2(
-      `UPDATE suppliers SET name=?, telegram_chat_id=?, telegram_username=?, phone=?, products_note=?, note=?, branch_id=? WHERE id=?`,
-      [name, telegram_chat_id || '', telegram_username || '', phone || '', products_note || '', note || '', branch_id || null, req.params.id]
+      `UPDATE suppliers SET name=?, telegram_chat_id=?, telegram_username=?, phone=?, products_note=?, note=?, branch_ids=? WHERE id=?`,
+      [name, telegram_chat_id || '', telegram_username || '', phone || '', products_note || '', note || '', bids, req.params.id]
     );
     saveDb();
     res.json({ ok: true });

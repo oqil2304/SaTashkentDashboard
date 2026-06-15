@@ -56,6 +56,16 @@ const pendingChecks    = new Map();  // admin chat_id → { order_id, supplier_c
 
 const adminOnly = (chatId) => String(chatId) === ADMIN_CHAT_ID;
 
+// Zakaz holatlari uchun chiroyli yorliqlar
+const ORDER_STATUS = {
+  approved:         '✅ Tasdiqlangan',
+  manual_pending:   '⏳ Yuborildi',
+  awaiting_invoice: '📄 Faktura kutilyapti',
+  invoice_received: '✅ Faktura keldi',
+  delivered:        '📦 Yetkazildi',
+  cancelled:        '❌ Bekor qilingan'
+};
+
 // Admin uchun doimiy klaviatura (pastda turadigan tugmalar)
 const adminKb = {
   keyboard: [[{ text: '🔍 Ombor tekshirish' }, { text: '📋 Buyurtmalar' }]],
@@ -314,7 +324,11 @@ async function handleMessage(msg) {
       await sendMessage(chatId,
         `👋 <b>SaTashkent Ta'minot Bot</b>\n\n` +
         `🔍 /check — Ombor holatini tekshirish\n` +
-        `📋 /orders — Aktiv buyurtmalar\n\n` +
+        `📋 /orders — Aktiv buyurtmalar\n` +
+        `⏳ /pending — Jarayondagi zakazlar\n` +
+        `✅ /done — Yetkazilgan zakazlar\n` +
+        `🚚 /suppliers — Ta'minotchilar ro'yxati\n` +
+        `📊 /stats — Umumiy holat\n\n` +
         `Quyidagi tugmalardan ham foydalanishingiz mumkin 👇`,
         { reply_markup: adminKb }
       );
@@ -344,8 +358,48 @@ async function handleMessage(msg) {
   if ((/^\/orders/.test(text) || text === '📋 Buyurtmalar') && adminOnly(chatId)) {
     const orders = await db.all2("SELECT * FROM supply_orders WHERE status NOT IN ('delivered','cancelled') ORDER BY created_at DESC LIMIT 20");
     if (!orders.length) { await sendMessage(chatId, "✅ Aktiv buyurtma yo'q."); return; }
-    const t = orders.map(o => `• <b>${o.product_name}</b> — ${o.qty} ${o.unit}\n  📌 ${o.status} | ${o.supplier_name || '—'}`).join('\n\n');
+    const t = orders.map(o => `• <b>${o.product_name}</b> — ${o.qty} ${o.unit}\n  📌 ${ORDER_STATUS[o.status] || o.status} | ${o.supplier_name || '—'}`).join('\n\n');
     await sendMessage(chatId, `📋 <b>Aktiv buyurtmalar:</b>\n\n${t}`);
+    return;
+  }
+
+  if (/^\/pending/.test(text) && adminOnly(chatId)) {
+    const orders = await db.all2("SELECT * FROM supply_orders WHERE status IN ('approved','manual_pending','awaiting_invoice','invoice_received') ORDER BY created_at DESC LIMIT 30");
+    if (!orders.length) { await sendMessage(chatId, "✅ Jarayonda zakaz yo'q."); return; }
+    const t = orders.map(o => `• <b>${o.product_name}</b> — ${o.qty} ${o.unit}\n  ${ORDER_STATUS[o.status] || o.status} | ${o.supplier_name || '—'} | ${(o.created_at||'').slice(0,10)}`).join('\n\n');
+    await sendMessage(chatId, `⏳ <b>Jarayondagi zakazlar:</b>\n\n${t}`);
+    return;
+  }
+
+  if (/^\/done/.test(text) && adminOnly(chatId)) {
+    const orders = await db.all2("SELECT * FROM supply_orders WHERE status='delivered' ORDER BY updated_at DESC LIMIT 20");
+    if (!orders.length) { await sendMessage(chatId, "📭 Yetkazilgan zakaz yo'q."); return; }
+    const t = orders.map(o => `• <b>${o.product_name}</b> — ${o.qty} ${o.unit}\n  📦 ${o.supplier_name || '—'} | ${(o.updated_at||'').slice(0,10)}`).join('\n\n');
+    await sendMessage(chatId, `✅ <b>Yetkazilgan zakazlar:</b>\n\n${t}`);
+    return;
+  }
+
+  if (/^\/suppliers/.test(text) && adminOnly(chatId)) {
+    const sups = await db.all2("SELECT * FROM suppliers ORDER BY name");
+    if (!sups.length) { await sendMessage(chatId, "🚚 Ta'minotchi yo'q. Dashboard orqali qo'shing."); return; }
+    const t = sups.map(s => `• <b>${s.name}</b>${s.telegram_chat_id ? ' ✅' : ' ⏳'}\n  ${s.products_note || '—'}${s.phone ? ' | 📞 '+s.phone : ''}`).join('\n\n');
+    await sendMessage(chatId, `🚚 <b>Ta'minotchilar:</b>\n\n${t}`);
+    return;
+  }
+
+  if (/^\/stats/.test(text) && adminOnly(chatId)) {
+    const pc = await db.get2('SELECT COUNT(*) AS c FROM products');
+    const low = await db.get2('SELECT COUNT(*) AS c FROM products WHERE daily_usage>0 AND (current_stock/daily_usage)<=7');
+    const fin = await db.get2('SELECT COUNT(*) AS c FROM products WHERE daily_usage>0 AND current_stock<=0');
+    const act = await db.get2("SELECT COUNT(*) AS c FROM supply_orders WHERE status NOT IN ('delivered','cancelled')");
+    const sup = await db.get2("SELECT COUNT(*) AS c FROM suppliers WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id!=''");
+    await sendMessage(chatId,
+      `📊 <b>Umumiy holat</b>\n\n` +
+      `📦 Mahsulotlar: <b>${pc?.c||0}</b>\n` +
+      `⏰ Kam qolgan (≤7 kun): <b>${low?.c||0}</b>\n` +
+      `🚨 Tugagan: <b>${fin?.c||0}</b>\n` +
+      `⏳ Aktiv zakazlar: <b>${act?.c||0}</b>\n` +
+      `🚚 Ulangan ta'minotchilar: <b>${sup?.c||0}</b>`);
     return;
   }
 
@@ -551,9 +605,13 @@ async function startBot() {
   if (ADMIN_CHAT_ID) {
     await tg('setMyCommands', {
       commands: [
-        { command: 'check',  description: '🔍 Ombor holatini tekshirish' },
-        { command: 'orders', description: '📋 Aktiv buyurtmalar' },
-        { command: 'help',   description: '❓ Yordam' }
+        { command: 'check',     description: '🔍 Ombor holatini tekshirish' },
+        { command: 'orders',    description: '📋 Aktiv buyurtmalar' },
+        { command: 'pending',   description: '⏳ Jarayondagi zakazlar' },
+        { command: 'done',      description: '✅ Yetkazilgan zakazlar' },
+        { command: 'suppliers', description: '🚚 Ta\'minotchilar ro\'yxati' },
+        { command: 'stats',     description: '📊 Umumiy holat' },
+        { command: 'help',      description: '❓ Yordam' }
       ],
       scope: { type: 'chat', chat_id: Number(ADMIN_CHAT_ID) }
     });
