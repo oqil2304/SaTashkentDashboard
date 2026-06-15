@@ -55,6 +55,7 @@ const invoiceByReply   = new Map();  // bot_msg_id → entry  (ta'minotchi reply
 const adminQtyFlow     = new Map();  // admin chat_id → { items, idx }
 const pendingChecks    = new Map();  // admin chat_id → [ {order_id, prompt_msg_id, ...}, ... ] (FIFO navbat)
 const checkByReply     = new Map();  // bot_prompt_msg_id → entry
+const pendingPrices    = new Map();  // admin chat_id → [ {order_id, prompt_msg_id, ...}, ... ] (narx so'rash)
 
 const adminOnly = (chatId) => String(chatId) === ADMIN_CHAT_ID;
 
@@ -347,6 +348,24 @@ async function finalizeOrders(chatId, items) {
   await sendMessage(chatId, `✅ ${items.length} ta pozitsiya tasdiqlandi.\n📨 ${sentCount} ta ta'minotchiga zakaz yuborildi.`);
 }
 
+// Chek so'rash — narx kiritilgandan keyin chaqiriladi
+async function _askForCheck(chatId, entry) {
+  const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [entry.order_id]);
+  if (!order) return;
+  const prompt = await sendMessage(chatId,
+    `🧾 <b>${entry.product_name}</b> — to'lov chekini (rasm yoki PDF) yuboring.\n` +
+    `U ta'minotchiga yuboriladi va tovar omborga kiritiladi.\n` +
+    `<i>💡 Bir nechta to'lov bo'lsa, chekni aynan shu xabarga "reply" qiling.</i>\n\n` +
+    `(Cheksiz davom ettirish uchun shu xabarga <b>skip</b> deb yozing)`);
+  const checkEntry = {
+    order_id: entry.order_id, supplier_chat_id: order.supplier_chat_id,
+    product_name: entry.product_name, qty: entry.qty, unit: entry.unit,
+    prompt_msg_id: prompt?.message_id
+  };
+  _qPush(pendingChecks, chatId, checkEntry);
+  if (prompt) checkByReply.set(prompt.message_id, checkEntry);
+}
+
 // ── Update handlerlar ───────────────────────────────────────────────────────
 async function handleMessage(msg) {
   const chatId = String(msg.chat.id);
@@ -464,7 +483,7 @@ async function handleMessage(msg) {
     return;
   }
 
-  // ── Admin holatlari: miqdor kiritish va to'lov cheki ──────────────────────
+  // ── Admin holatlari: miqdor kiritish, narx va to'lov cheki ──────────────────
   if (adminOnly(chatId)) {
     // 1) Miqdor so'rash oqimi
     const flow = adminQtyFlow.get(chatId);
@@ -482,7 +501,33 @@ async function handleMessage(msg) {
       return;
     }
 
-    // 2) To'lov cheki kutilmoqda (bir vaqtda bir nechta bo'lishi mumkin)
+    // 2) Narx so'rash oqimi (to'lovdan oldin)
+    const prices = _qGet(pendingPrices, chatId);
+    if (prices.length) {
+      const rid = msg.reply_to_message?.message_id;
+      const pe = (rid && pendingPrices._byReply?.get(rid)) || prices[0];
+
+      if (/^skip$/i.test((text || '').trim())) {
+        _qRemove(pendingPrices, chatId, pe.order_id);
+        // Narxsiz chekka o'tish
+        await _askForCheck(chatId, pe);
+        return;
+      }
+      const price = parseFloat((text || '').replace(/\s/g,'').replace(',', '.'));
+      if (isNaN(price) || price < 0) {
+        await sendMessage(chatId, `💰 Iltimos, to'g'ri narx kiriting (so'm da).\nYoki <b>skip</b> deb yozing (narxsiz yakunlash).`);
+        return;
+      }
+      _qRemove(pendingPrices, chatId, pe.order_id);
+      await db.run2('UPDATE supply_orders SET unit_price=? WHERE id=?', [price, pe.order_id]);
+      saveDb();
+      const total = Math.round(pe.qty * price);
+      await sendMessage(chatId, `✅ Narx saqlandi: <b>${price.toLocaleString()} so'm/${pe.unit}</b>\nJami: <b>${total.toLocaleString()} so'm</b>`);
+      await _askForCheck(chatId, pe);
+      return;
+    }
+
+    // 3) To'lov cheki kutilmoqda (bir vaqtda bir nechta bo'lishi mumkin)
     const checks = _qGet(pendingChecks, chatId);
     if (checks.length) {
       // Qaysi zakaz uchun? reply qilingan bo'lsa — aniq, aks holda navbatdagi birinchisi (FIFO)
@@ -590,18 +635,17 @@ async function handleCallback(query) {
     await editMessageReplyMarkup(chatId, msgId, { inline_keyboard: [] });
     const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [orderId]);
     if (!order) { await sendMessage(chatId, '❌ Buyurtma topilmadi.'); return; }
-    const prompt = await sendMessage(chatId,
-      `🧾 <b>${order.product_name}</b> — to'lov chekini (rasm yoki PDF) yuboring.\n` +
-      `U ta'minotchiga yuboriladi va tovar omborga kiritiladi.\n` +
-      `<i>💡 Bir nechta to'lov bo'lsa, chekni aynan shu xabarga "reply" qiling.</i>\n\n` +
-      `(Cheksiz davom ettirish uchun shu xabarga <b>skip</b> deb yozing)`);
     const entry = {
       order_id: orderId, supplier_chat_id: order.supplier_chat_id,
-      product_name: order.product_name, qty: order.qty, unit: order.unit,
-      prompt_msg_id: prompt?.message_id
+      product_name: order.product_name, qty: order.qty, unit: order.unit
     };
-    _qPush(pendingChecks, chatId, entry);
-    if (prompt) checkByReply.set(prompt.message_id, entry);
+    // Avval birlik narxini so'raymiz
+    const pricePrompt = await sendMessage(chatId,
+      `💰 <b>${order.product_name}</b> — birlik narxini kiriting (so'm da).\n` +
+      `Miqdor: <b>${order.qty} ${order.unit}</b>\n\n` +
+      `<i>Narxni bilmasangiz yoki kiritmoqchi bo'lmasangiz — <b>skip</b> deb yozing.</i>`);
+    entry.prompt_msg_id = pricePrompt?.message_id;
+    _qPush(pendingPrices, chatId, entry);
     return;
   }
   if (data.startsWith('reject_')) {
