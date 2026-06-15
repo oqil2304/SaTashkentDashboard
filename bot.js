@@ -51,8 +51,17 @@ let _botUsername = '';
 
 const approvalSessions = new Map();  // message_id → { items, chat_id }
 const pendingInvoices  = new Map();  // supplier_chat_id → { order_id, ... }
+const adminQtyFlow     = new Map();  // admin chat_id → { items, idx }
+const pendingChecks    = new Map();  // admin chat_id → { order_id, supplier_chat_id, ... }
 
 const adminOnly = (chatId) => String(chatId) === ADMIN_CHAT_ID;
+
+// Admin uchun doimiy klaviatura (pastda turadigan tugmalar)
+const adminKb = {
+  keyboard: [[{ text: '🔍 Ombor tekshirish' }, { text: '📋 Buyurtmalar' }]],
+  resize_keyboard: true,
+  is_persistent: true
+};
 
 function qtyForOrder(p) {
   const TARGET_DAYS = 30;
@@ -81,7 +90,7 @@ function buildApprovalText(items) {
     const icon = it.days_left <= 0 ? '🚨' : it.days_left <= 2 ? '⚠️' : '📦';
     const status = it.days_left <= 0 ? 'TUGAGAN' : `${Number(it.days_left).toFixed(1)} kun qoldi`;
     const sup = it.supplier_name ? `👤 ${it.supplier_name}` : "❌ Ta'minotchi biriktirilmagan";
-    return `${icon} <b>${it.name}</b> — ${status}\n   Taklif: +${it.qty} ${it.unit || ''} | ${sup}`;
+    return `${icon} <b>${it.name}</b> — ${status}\n   Qoldiq: ${it.stock} ${it.unit || ''} | Taklif: +${it.qty} ${it.unit || ''}\n   ${sup}`;
   });
   return `📋 <b>Omborda kam / tugagan tovarlar</b>\n\n${lines.join('\n\n')}\n\n✅ Keraklilarini tanlang va tasdiqlang:`;
 }
@@ -110,6 +119,7 @@ async function notifyLowStock(forceCheck = false) {
   }
   const items = prods.map(p => ({
     product_id: p.id, name: p.name, unit: p.unit || '', qty: qtyForOrder(p),
+    stock: p.current_stock || 0,
     days_left: p.daily_usage > 0 ? p.current_stock / p.daily_usage : Infinity,
     supplier_id: p.supplier_id || null, supplier_name: p.supplier_name || null,
     supplier_chat_id: p.supplier_chat_id || null, selected: false
@@ -167,6 +177,39 @@ async function completeOrder(orderId) {
   console.log(`[bot] Zakaz #${orderId} yakunlandi — ombor yangilandi`);
 }
 
+// ── Miqdor so'rash oqimi (admin tasdiqlagandan keyin) ───────────────────────
+async function askNextQty(chatId) {
+  const flow = adminQtyFlow.get(String(chatId));
+  if (!flow) return;
+  if (flow.idx >= flow.items.length) {
+    adminQtyFlow.delete(String(chatId));
+    await finalizeOrders(chatId, flow.items);
+    return;
+  }
+  const it = flow.items[flow.idx];
+  await sendMessage(chatId,
+    `📝 <b>${it.name}</b> — qancha zakas qilamiz?\n` +
+    `Qoldiq: ${it.stock} ${it.unit} | Taklif: <b>${it.qty} ${it.unit}</b>\n\n` +
+    `Sonni yuboring yoki taklifni qabul qilish uchun <b>ok</b> deb yozing:`);
+}
+
+async function finalizeOrders(chatId, items) {
+  let sentCount = 0;
+  for (const it of items) {
+    const r = await db.run2(
+      `INSERT INTO supply_orders (product_id, product_name, qty, unit, supplier_id, supplier_name, supplier_chat_id, status, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+      [it.product_id, it.name, it.qty, it.unit, it.supplier_id, it.supplier_name, it.supplier_chat_id, 'approved']);
+    saveDb();
+    if (it.supplier_id && it.supplier_chat_id) {
+      if (await sendToSupplier({ ...it, id: r.lastID, product_name: it.name })) sentCount++;
+    } else {
+      await sendMessage(chatId, `⚠️ <b>${it.name}</b> uchun ta'minotchi biriktirilmagan yoki u botga ulanmagan. Dashboard orqali sozlang.`);
+    }
+  }
+  await sendMessage(chatId, `✅ ${items.length} ta tovar tasdiqlandi.\n📨 ${sentCount} ta ta'minotchiga zakaz yuborildi.`);
+}
+
 // ── Update handlerlar ───────────────────────────────────────────────────────
 async function handleMessage(msg) {
   const chatId = String(msg.chat.id);
@@ -182,22 +225,22 @@ async function handleMessage(msg) {
     return;
   }
 
-  // /start (admin)
-  if (/^\/start$/.test(text)) {
+  // /start, /help (admin)
+  if (/^\/(start|help)$/.test(text)) {
     if (adminOnly(chatId))
-      await sendMessage(chatId, `👋 <b>SaTashkent Ta'minot Bot</b>\n\nKomandalar:\n/check — Ombor holatini tekshirish\n/orders — Aktiv buyurtmalar`);
+      await sendMessage(chatId, `👋 <b>SaTashkent Ta'minot Bot</b>\n\nKomandalar:\n/check — Ombor holatini tekshirish\n/orders — Aktiv buyurtmalar\n\nQuyidagi tugmalardan ham foydalanishingiz mumkin 👇`, { reply_markup: adminKb });
     else
       await sendMessage(chatId, `👋 Salom! Bu SaTashkent ta'minot boti. Ulanish uchun admindan maxsus havola so'rang.`);
     return;
   }
 
-  if (/^\/check/.test(text) && adminOnly(chatId)) {
+  if ((/^\/check/.test(text) || text === '🔍 Ombor tekshirish') && adminOnly(chatId)) {
     await sendMessage(chatId, '🔍 Ombor tekshirilmoqda...');
     await notifyLowStock(true);
     return;
   }
 
-  if (/^\/orders/.test(text) && adminOnly(chatId)) {
+  if ((/^\/orders/.test(text) || text === '📋 Buyurtmalar') && adminOnly(chatId)) {
     const orders = await db.all2("SELECT * FROM supply_orders WHERE status NOT IN ('delivered','cancelled') ORDER BY created_at DESC LIMIT 20");
     if (!orders.length) { await sendMessage(chatId, "✅ Aktiv buyurtma yo'q."); return; }
     const t = orders.map(o => `• <b>${o.product_name}</b> — ${o.qty} ${o.unit}\n  📌 ${o.status} | ${o.supplier_name || '—'}`).join('\n\n');
@@ -205,8 +248,52 @@ async function handleMessage(msg) {
     return;
   }
 
+  // ── Admin holatlari: miqdor kiritish va to'lov cheki ──────────────────────
+  if (adminOnly(chatId)) {
+    // 1) Miqdor so'rash oqimi
+    const flow = adminQtyFlow.get(chatId);
+    if (flow) {
+      const it = flow.items[flow.idx];
+      let q;
+      if (/^ok$/i.test(text.trim())) q = it.qty;
+      else {
+        q = parseFloat(text.replace(',', '.'));
+        if (isNaN(q) || q <= 0) { await sendMessage(chatId, '❌ Iltimos, to\'g\'ri son yuboring yoki <b>ok</b> deb yozing.'); return; }
+      }
+      it.qty = q;
+      flow.idx++;
+      await askNextQty(chatId);
+      return;
+    }
+
+    // 2) To'lov cheki kutilmoqda
+    const check = pendingChecks.get(chatId);
+    if (check) {
+      if (/^skip$/i.test((text || '').trim())) {
+        pendingChecks.delete(chatId);
+        await sendMessage(chatId, '🧾 Cheksiz yakunlanmoqda...');
+        await completeOrder(check.order_id);
+        return;
+      }
+      let fileId = null;
+      if (msg.document) fileId = msg.document.file_id;
+      else if (msg.photo) fileId = msg.photo[msg.photo.length - 1].file_id;
+      if (!fileId) { await sendMessage(chatId, '🧾 To\'lov chekini rasm yoki PDF ko\'rinishida yuboring (yoki <b>skip</b> deb yozing).'); return; }
+      pendingChecks.delete(chatId);
+      if (check.supplier_chat_id) {
+        await sendMessage(check.supplier_chat_id, `✅ <b>${check.product_name}</b> (${check.qty} ${check.unit}) uchun to'lov amalga oshirildi! To'lov cheki:`);
+        await forwardMessage(check.supplier_chat_id, msg.chat.id, msg.message_id);
+        await db.run2('UPDATE supply_orders SET payment_check_file_id=? WHERE id=?', [fileId, check.order_id]);
+        saveDb();
+        await sendMessage(chatId, '🧾 Chek ta\'minotchiga yuborildi.');
+      }
+      await completeOrder(check.order_id);
+      return;
+    }
+    return;
+  }
+
   // Ta'minotchidan faktura (admin emas + kutilayotgan zakaz bor)
-  if (adminOnly(chatId)) return;
   const pending = pendingInvoices.get(chatId);
   if (!pending) return;
 
@@ -245,9 +332,18 @@ async function handleCallback(query) {
   // To'lov tasdiqlash / rad etish
   if (data.startsWith('pay_')) {
     const orderId = parseInt(data.replace('pay_', ''));
-    await answerCallbackQuery(query.id, { text: '✅ Ombor yangilanmoqda...' });
+    await answerCallbackQuery(query.id, { text: "✅ To'lov cheki so'ralmoqda..." });
     await editMessageReplyMarkup(chatId, msgId, { inline_keyboard: [] });
-    await completeOrder(orderId);
+    const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [orderId]);
+    if (!order) { await sendMessage(chatId, '❌ Buyurtma topilmadi.'); return; }
+    pendingChecks.set(String(chatId), {
+      order_id: orderId, supplier_chat_id: order.supplier_chat_id,
+      product_name: order.product_name, qty: order.qty, unit: order.unit
+    });
+    await sendMessage(chatId,
+      `🧾 <b>${order.product_name}</b> — to'lov chekini (rasm yoki PDF) yuboring.\n` +
+      `U ta'minotchiga yuboriladi va tovar omborga kiritiladi.\n\n` +
+      `(Cheksiz davom ettirish uchun <b>skip</b> deb yozing)`);
     return;
   }
   if (data.startsWith('reject_')) {
@@ -278,22 +374,11 @@ async function handleCallback(query) {
     if (!selected.length) { await answerCallbackQuery(query.id, { text: 'Hech narsa tanlanmagan!', show_alert: true }); return; }
     approvalSessions.delete(msgId);
     await editMessageReplyMarkup(chatId, msgId, { inline_keyboard: [] });
-    await answerCallbackQuery(query.id, { text: '✅ Yuborilmoqda...' });
-
-    let sentCount = 0;
-    for (const it of selected) {
-      const r = await db.run2(
-        `INSERT INTO supply_orders (product_id, product_name, qty, unit, supplier_id, supplier_name, supplier_chat_id, status, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
-        [it.product_id, it.name, it.qty, it.unit, it.supplier_id, it.supplier_name, it.supplier_chat_id, 'approved']);
-      saveDb();
-      if (it.supplier_id && it.supplier_chat_id) {
-        if (await sendToSupplier({ ...it, id: r.lastID, product_name: it.name })) sentCount++;
-      } else {
-        await sendMessage(chatId, `⚠️ <b>${it.name}</b> uchun ta'minotchi biriktirilmagan yoki u botga ulanmagan. Dashboard orqali sozlang.`);
-      }
-    }
-    await sendMessage(chatId, `✅ ${selected.length} ta tovar tasdiqlandi.\n📨 ${sentCount} ta ta'minotchiga xabar yuborildi.`);
+    await answerCallbackQuery(query.id, { text: '✅ Miqdorlar so\'ralmoqda...' });
+    // Har bir tovar uchun zakaz miqdorini admindan so'raymiz
+    adminQtyFlow.set(String(chatId), { items: selected.map(it => ({ ...it })), idx: 0 });
+    await sendMessage(chatId, `📦 <b>${selected.length} ta tovar tanlandi.</b>\nEndi har biri uchun zakaz miqdorini kiriting:`);
+    await askNextQty(chatId);
     return;
   }
 
@@ -333,6 +418,12 @@ async function startBot() {
   if (!me) { console.log('[bot] ❌ Token noto\'g\'ri yoki internet yo\'q — bot ishlamadi'); return; }
   _botUsername = me.username || '';
   console.log(`[bot] ✅ @${_botUsername} tayyor`);
+  // Doimiy buyruqlar ro'yxati (menyu tugmasi)
+  await tg('setMyCommands', { commands: [
+    { command: 'check',  description: 'Ombor holatini tekshirish' },
+    { command: 'orders', description: 'Aktiv buyurtmalar' },
+    { command: 'help',   description: 'Yordam' }
+  ]});
   _polling = true;
   _offset = 0; // navbatdagi xabarlardan boshlab o'qiymiz (birinchi /start ni o'tkazib yubormaslik)
   pollLoop();
