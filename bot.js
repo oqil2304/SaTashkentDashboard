@@ -63,6 +63,16 @@ const adminKb = {
   is_persistent: true
 };
 
+// Nomni normallashtirish — "suv", "Suv (ichimlik)", "SUV " hammasi → "suv"
+function normName(s) {
+  return (s || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')          // qavs ichidagini olib tashlash
+    .replace(/[^0-9a-zа-яёўқғҳ\s]/gi, ' ') // faqat harf/raqam qoldirish
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function qtyForOrder(p) {
   const TARGET_DAYS = 30;
   const raw = Math.max(0, TARGET_DAYS * (p.daily_usage || 0) - (p.current_stock || 0));
@@ -90,7 +100,8 @@ function buildApprovalText(items) {
     const icon = it.days_left <= 0 ? '🚨' : it.days_left <= 2 ? '⚠️' : '📦';
     const status = it.days_left <= 0 ? 'TUGAGAN' : `${Number(it.days_left).toFixed(1)} kun qoldi`;
     const sup = it.supplier_name ? `👤 ${it.supplier_name}` : "❌ Ta'minotchi biriktirilmagan";
-    return `${icon} <b>${it.name}</b> — ${status}\n   Qoldiq: ${it.stock} ${it.unit || ''} | Taklif: +${it.qty} ${it.unit || ''}\n   ${sup}`;
+    const multi = it.members && it.members.length > 1 ? ` <i>(${it.members.length} ta filial birlashtirildi)</i>` : '';
+    return `${icon} <b>${it.name}</b>${multi} — ${status}\n   Qoldiq: ${it.stock} ${it.unit || ''} | Taklif: +${it.qty} ${it.unit || ''}\n   ${sup}`;
   });
   return `📋 <b>Omborda kam / tugagan tovarlar</b>\n\n${lines.join('\n\n')}\n\n✅ Keraklilarini tanlang va tasdiqlang:`;
 }
@@ -105,8 +116,12 @@ async function getLowStockProducts() {
     WHERE p.daily_usage > 0 AND (p.current_stock / p.daily_usage) <= 7
     ORDER BY (p.current_stock / p.daily_usage) ASC`);
   const active = await db.all2(
-    "SELECT product_id FROM supply_orders WHERE status NOT IN ('delivered','cancelled')");
-  const activeIds = new Set(active.map(r => r.product_id));
+    "SELECT product_id, members_json FROM supply_orders WHERE status NOT IN ('delivered','cancelled')");
+  const activeIds = new Set();
+  for (const r of active) {
+    if (r.product_id) activeIds.add(r.product_id);
+    try { (JSON.parse(r.members_json || '[]')).forEach(m => m.product_id && activeIds.add(m.product_id)); } catch (_) {}
+  }
   return rows.filter(p => !activeIds.has(p.id));
 }
 
@@ -117,25 +132,53 @@ async function notifyLowStock(forceCheck = false) {
     if (forceCheck) await sendMessage(ADMIN_CHAT_ID, '✅ Barcha tovarlar yetarli! Buyurtma kerak emas.');
     return;
   }
-  const items = prods.map(p => ({
+  const raw = prods.map(p => ({
     product_id: p.id, name: p.name, unit: p.unit || '', qty: qtyForOrder(p),
     stock: p.current_stock || 0,
     days_left: p.daily_usage > 0 ? p.current_stock / p.daily_usage : Infinity,
     supplier_id: p.supplier_id || null, supplier_name: p.supplier_name || null,
-    supplier_chat_id: p.supplier_chat_id || null, selected: false
+    supplier_chat_id: p.supplier_chat_id || null
   }));
+
+  // Bir xil nomli mahsulotlarni (sintaksisi boshqacha) bitta guruhga jamlash
+  const groups = new Map();
+  for (const it of raw) {
+    const key = normName(it.name);
+    let g = groups.get(key);
+    if (!g) {
+      g = { key, name: it.name, unit: it.unit, qty: 0, stock: 0, days_left: it.days_left,
+            members: [], supplier_id: null, supplier_name: null, supplier_chat_id: null, selected: false };
+      groups.set(key, g);
+    }
+    g.qty   = Math.round((g.qty + it.qty) * 10) / 10;
+    g.stock = Math.round((g.stock + it.stock) * 10) / 10;
+    g.days_left = Math.min(g.days_left, it.days_left);
+    g.members.push({ product_id: it.product_id, name: it.name, qty: it.qty, unit: it.unit });
+    // Ta'minotchi: guruhdagi birinchi biriktirilgan ta'minotchi (bitta ta'minotchi)
+    if (!g.supplier_id && it.supplier_id) {
+      g.supplier_id = it.supplier_id; g.supplier_name = it.supplier_name; g.supplier_chat_id = it.supplier_chat_id;
+    }
+  }
+  const items = [...groups.values()];
+
   const msg = await sendMessage(ADMIN_CHAT_ID, buildApprovalText(items), { reply_markup: buildApprovalKeyboard(items) });
   if (msg) approvalSessions.set(msg.message_id, { items, chat_id: ADMIN_CHAT_ID });
-  console.log(`[bot] Admin ga ${prods.length} ta tovar ro'yxati yuborildi`);
+  console.log(`[bot] Admin ga ${items.length} ta guruh (${prods.length} ta tovar) ro'yxati yuborildi`);
 }
 
 // ── Ta'minotchiga xabar ─────────────────────────────────────────────────────
 async function sendToSupplier(order) {
   if (!order.supplier_chat_id) return false;
+  let body;
+  if (order.members && order.members.length > 1) {
+    const list = order.members.map(m => `   • ${m.name}: <b>${m.qty} ${m.unit}</b>`).join('\n');
+    body = `Bizda <b>${order.product_name}</b> tugab bormoqda.\nZakaz (jami ${order.qty} ${order.unit}):\n${list}\n`;
+  } else {
+    body = `Bizda <b>${order.product_name}</b> tugab bormoqda.\nZakaz miqdori: <b>${order.qty} ${order.unit}</b>\n`;
+  }
   const text = `🏪 <b>SaTashkent Ta'minot Bo'limidan zakaz</b>\n\n` +
     `Salom, <b>${order.supplier_name}</b>!\n\n` +
-    `Bizda <b>${order.product_name}</b> tugab bormoqda.\n` +
-    `Zakaz miqdori: <b>${order.qty} ${order.unit}</b>\n\n` +
+    `${body}\n` +
     `Schet-faktura yuboring — imkon qadar tezroq.\nRahmat! 🙏`;
   const sent = await sendMessage(order.supplier_chat_id, text);
   if (!sent) return false;
@@ -165,16 +208,24 @@ async function forwardToFinance(orderId, fileId, mimeType) {
 async function completeOrder(orderId) {
   const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [orderId]);
   if (!order) return;
-  await db.run2(
-    `INSERT INTO purchases (product_id, quantity, unit_price, purchase_date, supplier, note, remaining_qty, created_at)
-     VALUES (?, ?, ?, date('now'), ?, 'Telegram bot orqali zakaz', ?, datetime('now'))`,
-    [order.product_id, order.qty, order.unit_price || 0, order.supplier_name || '', order.qty]);
-  await db.run2('UPDATE products SET current_stock = current_stock + ? WHERE id=?', [order.qty, order.product_id]);
+  let members = null;
+  try { members = order.members_json ? JSON.parse(order.members_json) : null; } catch (_) {}
+  if (!members || !members.length)
+    members = [{ product_id: order.product_id, name: order.product_name, qty: order.qty, unit: order.unit }];
+
+  for (const m of members) {
+    if (!m.product_id || !(m.qty > 0)) continue;
+    await db.run2(
+      `INSERT INTO purchases (product_id, quantity, unit_price, purchase_date, supplier, note, remaining_qty, created_at)
+       VALUES (?, ?, ?, date('now'), ?, 'Telegram bot orqali zakaz', ?, datetime('now'))`,
+      [m.product_id, m.qty, order.unit_price || 0, order.supplier_name || '', m.qty]);
+    await db.run2('UPDATE products SET current_stock = current_stock + ? WHERE id=?', [m.qty, m.product_id]);
+  }
   await db.run2("UPDATE supply_orders SET status='delivered', updated_at=datetime('now') WHERE id=?", [orderId]);
   saveDb();
   if (ADMIN_CHAT_ID)
     await sendMessage(ADMIN_CHAT_ID, `✅ <b>${order.product_name}</b> — ${order.qty} ${order.unit} omborga kiritildi!\nZakaz yakunlandi.`);
-  console.log(`[bot] Zakaz #${orderId} yakunlandi — ombor yangilandi`);
+  console.log(`[bot] Zakaz #${orderId} yakunlandi — ${members.length} ta pozitsiya ombori yangilandi`);
 }
 
 // ── Miqdor so'rash oqimi (admin tasdiqlagandan keyin) ───────────────────────
@@ -193,21 +244,36 @@ async function askNextQty(chatId) {
     `Sonni yuboring yoki taklifni qabul qilish uchun <b>ok</b> deb yozing:`);
 }
 
+// Guruh umumiy miqdorini a'zo mahsulotlarga ulush qilib taqsimlash
+function splitMembers(group) {
+  const members = group.members || [{ product_id: group.product_id, name: group.name, qty: group.qty, unit: group.unit }];
+  const baseSum = members.reduce((s, m) => s + (m.qty || 0), 0) || 1;
+  const factor = group.qty / baseSum;
+  let assigned = 0;
+  return members.map((m, i) => {
+    let share;
+    if (i === members.length - 1) share = Math.round((group.qty - assigned) * 10) / 10;
+    else { share = Math.round((m.qty || 0) * factor * 10) / 10; assigned += share; }
+    return { product_id: m.product_id, name: m.name, unit: m.unit, qty: Math.max(0, share) };
+  });
+}
+
 async function finalizeOrders(chatId, items) {
   let sentCount = 0;
   for (const it of items) {
+    const members = splitMembers(it);
     const r = await db.run2(
-      `INSERT INTO supply_orders (product_id, product_name, qty, unit, supplier_id, supplier_name, supplier_chat_id, status, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
-      [it.product_id, it.name, it.qty, it.unit, it.supplier_id, it.supplier_name, it.supplier_chat_id, 'approved']);
+      `INSERT INTO supply_orders (product_id, product_name, qty, unit, supplier_id, supplier_name, supplier_chat_id, status, members_json, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+      [members[0].product_id, it.name, it.qty, it.unit, it.supplier_id, it.supplier_name, it.supplier_chat_id, 'approved', JSON.stringify(members)]);
     saveDb();
     if (it.supplier_id && it.supplier_chat_id) {
-      if (await sendToSupplier({ ...it, id: r.lastID, product_name: it.name })) sentCount++;
+      if (await sendToSupplier({ ...it, id: r.lastID, product_name: it.name, members })) sentCount++;
     } else {
       await sendMessage(chatId, `⚠️ <b>${it.name}</b> uchun ta'minotchi biriktirilmagan yoki u botga ulanmagan. Dashboard orqali sozlang.`);
     }
   }
-  await sendMessage(chatId, `✅ ${items.length} ta tovar tasdiqlandi.\n📨 ${sentCount} ta ta'minotchiga zakaz yuborildi.`);
+  await sendMessage(chatId, `✅ ${items.length} ta pozitsiya tasdiqlandi.\n📨 ${sentCount} ta ta'minotchiga zakaz yuborildi.`);
 }
 
 // ── Update handlerlar ───────────────────────────────────────────────────────
