@@ -323,15 +323,16 @@ async function pollLoop() {
   setTimeout(pollLoop, updates ? 0 : 3000); // xato bo'lsa 3s kutib qayta
 }
 
-function startBot() {
+async function startBot() {
   if (!API) { console.log("[bot] BOT_TOKEN yo'q — bot ishlamaydi"); return; }
+  // Webhook o'chirilgan bo'lishi kerak (polling bilan ziddiyat bo'lmasligi uchun)
+  await tg('deleteWebhook', { drop_pending_updates: false });
+  const me = await tg('getMe');
+  if (!me) { console.log('[bot] ❌ Token noto\'g\'ri yoki internet yo\'q — bot ishlamadi'); return; }
   _polling = true;
-  // Eski navbatdagi updatelarni tozalash uchun offset ni oxirgisiga o'rnatamiz
-  tg('getUpdates', { offset: -1 }).then(r => {
-    if (r && r.length) _offset = r[r.length - 1].update_id + 1;
-    pollLoop();
-    console.log('[bot] ✅ SaTashkent Bot ishga tushdi (long polling)');
-  });
+  _offset = 0; // navbatdagi xabarlardan boshlab o'qiymiz (birinchi /start ni o'tkazib yubormaslik)
+  pollLoop();
+  console.log(`[bot] ✅ Bot ishga tushdi: @${me.username} (long polling)`);
 }
 
 module.exports = { startBot, notifyLowStock, completeOrder };

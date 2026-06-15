@@ -1,7 +1,6 @@
 // ─── suppliers.js — Ta'minotchilar bo'limi ───────────────────────────────────
+// Eslatma: `suppliers` global o'zgaruvchisi state.js da e'lon qilingan.
 console.log('[suppliers.js] yuklandi');
-
-let suppliers = [];
 
 async function loadSuppliers() {
   suppliers = await api('GET', '/api/suppliers');
