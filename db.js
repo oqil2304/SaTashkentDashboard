@@ -82,6 +82,7 @@ async function init() {
   // ── Yangi ustunlar (eski bazada bo'lmasligi mumkin) ──────────────────────────
   ensureColumn('products', 'supplier_id', 'INTEGER');
   ensureColumn('supply_orders', 'members_json', 'TEXT');
+  ensureColumn('suppliers', 'branch_id', 'INTEGER');
   ensureColumn('users', 'email', 'TEXT');
   ensureColumn('users', 'phone', 'TEXT');
   ensureColumn('users', 'full_name', 'TEXT');

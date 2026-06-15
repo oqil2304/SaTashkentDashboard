@@ -1,7 +1,7 @@
 // ─── overview.js — Umumiy ko'rinish bo'limi ───────────────────────────────────
 console.log('[overview.js] yuklandi');
 
-let overviewFilter = 'low7'; // qaysi karta tanlangan: all | urgent | low7 | spend
+let overviewFilter = 'all'; // qaysi karta tanlangan: all | urgent | low7 | spend
 
 // Tugagan mahsulotlar (ombor butunlay tugagan — 0 yoki undan kam kun)
 function finishedProducts() {

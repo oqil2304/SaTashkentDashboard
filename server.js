@@ -497,18 +497,21 @@ app.get('/api/report', auth, async (req, res) => {
 
 // ── Ta'minotchilar API ────────────────────────────────────────────────────
 app.get('/api/suppliers', auth, async (req, res) => {
-  try { res.json(await db.all2('SELECT * FROM suppliers ORDER BY name')); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    res.json(await db.all2(
+      `SELECT s.*, b.name AS branch_name FROM suppliers s LEFT JOIN branches b ON b.id=s.branch_id ORDER BY s.name`
+    ));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/suppliers', auth, adminOnly, async (req, res) => {
   try {
-    const { name, telegram_chat_id, telegram_username, phone, products_note, note } = req.body;
+    const { name, telegram_chat_id, telegram_username, phone, products_note, note, branch_id } = req.body;
     if (!name) return res.status(400).json({ error: 'Ism kerak' });
     const r = await db.run2(
-      `INSERT INTO suppliers (name, telegram_chat_id, telegram_username, phone, products_note, note, created_at)
-       VALUES (?,?,?,?,?,?,datetime('now'))`,
-      [name, telegram_chat_id || '', telegram_username || '', phone || '', products_note || '', note || '']
+      `INSERT INTO suppliers (name, telegram_chat_id, telegram_username, phone, products_note, note, branch_id, created_at)
+       VALUES (?,?,?,?,?,?,?,datetime('now'))`,
+      [name, telegram_chat_id || '', telegram_username || '', phone || '', products_note || '', note || '', branch_id || null]
     );
     saveDb();
     res.json({ id: r.lastID });
@@ -517,10 +520,10 @@ app.post('/api/suppliers', auth, adminOnly, async (req, res) => {
 
 app.put('/api/suppliers/:id', auth, adminOnly, async (req, res) => {
   try {
-    const { name, telegram_chat_id, telegram_username, phone, products_note, note } = req.body;
+    const { name, telegram_chat_id, telegram_username, phone, products_note, note, branch_id } = req.body;
     await db.run2(
-      `UPDATE suppliers SET name=?, telegram_chat_id=?, telegram_username=?, phone=?, products_note=?, note=? WHERE id=?`,
-      [name, telegram_chat_id || '', telegram_username || '', phone || '', products_note || '', note || '', req.params.id]
+      `UPDATE suppliers SET name=?, telegram_chat_id=?, telegram_username=?, phone=?, products_note=?, note=?, branch_id=? WHERE id=?`,
+      [name, telegram_chat_id || '', telegram_username || '', phone || '', products_note || '', note || '', branch_id || null, req.params.id]
     );
     saveDb();
     res.json({ ok: true });

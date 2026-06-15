@@ -287,16 +287,51 @@ async function handleMessage(msg) {
     const sid = parseInt(m[1]);
     await db.run2('UPDATE suppliers SET telegram_chat_id=? WHERE id=?', [chatId, sid]);
     saveDb();
-    await sendMessage(chatId, `✅ Siz SaTashkent ta'minot tizimiga ta'minotchi sifatida ulandingiz!\n\nZakaz kelganda shu botdan xabar olasiz. Rahmat, ${msg.from.first_name || ''}!`);
+    await tg('setMyCommands', {
+      commands: [
+        { command: 'myzakaz', description: '📦 Mening zakazlarim' },
+        { command: 'jarayon', description: '⏳ Jarayondagi zakazlar' },
+        { command: 'help',    description: '❓ Yordam' }
+      ],
+      scope: { type: 'chat', chat_id: Number(chatId) }
+    });
+    await sendMessage(chatId,
+      `✅ Siz <b>SaTashkent</b> ta'minot tizimiga ta'minotchi sifatida ulandingiz!\n\n` +
+      `Zakaz kelganda shu botdan xabar olasiz.\nQuyidagi tugmalar orqali zakazlarni kuzatib boring 👇`,
+      {
+        reply_markup: {
+          keyboard: [[{ text: '📦 Zakazlarim' }, { text: '⏳ Jarayon' }]],
+          resize_keyboard: true, is_persistent: true
+        }
+      }
+    );
     return;
   }
 
   // /start, /help (admin)
   if (/^\/(start|help)$/.test(text)) {
-    if (adminOnly(chatId))
-      await sendMessage(chatId, `👋 <b>SaTashkent Ta'minot Bot</b>\n\nKomandalar:\n/check — Ombor holatini tekshirish\n/orders — Aktiv buyurtmalar\n\nQuyidagi tugmalardan ham foydalanishingiz mumkin 👇`, { reply_markup: adminKb });
-    else
-      await sendMessage(chatId, `👋 Salom! Bu SaTashkent ta'minot boti. Ulanish uchun admindan maxsus havola so'rang.`);
+    if (adminOnly(chatId)) {
+      await sendMessage(chatId,
+        `👋 <b>SaTashkent Ta'minot Bot</b>\n\n` +
+        `🔍 /check — Ombor holatini tekshirish\n` +
+        `📋 /orders — Aktiv buyurtmalar\n\n` +
+        `Quyidagi tugmalardan ham foydalanishingiz mumkin 👇`,
+        { reply_markup: adminKb }
+      );
+    } else {
+      // Ta'minotchi ulangan bo'lsa — uning menyusini ko'rsatish
+      const sup = await db.get2("SELECT id FROM suppliers WHERE telegram_chat_id=?", [chatId]);
+      if (sup) {
+        await sendMessage(chatId, `👋 Salom! SaTashkent ta'minot botiga xush kelibsiz.\n\nZakazlaringizni kuzatib boring 👇`, {
+          reply_markup: {
+            keyboard: [[{ text: '📦 Zakazlarim' }, { text: '⏳ Jarayon' }]],
+            resize_keyboard: true, is_persistent: true
+          }
+        });
+      } else {
+        await sendMessage(chatId, `👋 Salom! Bu SaTashkent ta'minot boti. Ulanish uchun admindan maxsus havola so'rang.`);
+      }
+    }
     return;
   }
 
@@ -356,6 +391,29 @@ async function handleMessage(msg) {
       await completeOrder(check.order_id);
       return;
     }
+    return;
+  }
+
+  // Ta'minotchi buyruqlari
+  if (/^\/(myzakaz|jarayon)/.test(text) || text === '📦 Zakazlarim' || text === '⏳ Jarayon') {
+    const onlyActive = /jarayon/.test(text) || text === '⏳ Jarayon';
+    const statuses = onlyActive
+      ? "('approved','manual_pending','awaiting_invoice','invoice_received')"
+      : "('approved','manual_pending','awaiting_invoice','invoice_received','delivered')";
+    const orders = await db.all2(
+      `SELECT * FROM supply_orders WHERE supplier_chat_id=? AND status IN ${statuses} ORDER BY created_at DESC LIMIT 20`,
+      [chatId]
+    );
+    if (!orders.length) { await sendMessage(chatId, onlyActive ? '✅ Jarayonda zakaz yo\'q.' : "📭 Zakaz tarixi bo'sh."); return; }
+    const statusLabel = { approved: '✅ Tasdiqlangan', manual_pending: '⏳ Yuborildi', awaiting_invoice: '📄 Faktura kutilyapti', invoice_received: '✅ Faktura keldi', delivered: '📦 Yetkazildi' };
+    const t = orders.map(o => `• <b>${o.product_name}</b> — ${o.qty} ${o.unit}\n  ${statusLabel[o.status] || o.status} | ${(o.created_at||'').slice(0,10)}`).join('\n\n');
+    const title = onlyActive ? '⏳ Jarayondagi zakazlar:' : '📋 Zakazlar tarixi:';
+    await sendMessage(chatId, `${title}\n\n${t}`, {
+      reply_markup: {
+        keyboard: [[{ text: '📦 Zakazlarim' }, { text: '⏳ Jarayon' }]],
+        resize_keyboard: true, is_persistent: true
+      }
+    });
     return;
   }
 
@@ -484,12 +542,35 @@ async function startBot() {
   if (!me) { console.log('[bot] ❌ Token noto\'g\'ri yoki internet yo\'q — bot ishlamadi'); return; }
   _botUsername = me.username || '';
   console.log(`[bot] ✅ @${_botUsername} tayyor`);
-  // Doimiy buyruqlar ro'yxati (menyu tugmasi)
-  await tg('setMyCommands', { commands: [
-    { command: 'check',  description: 'Ombor holatini tekshirish' },
-    { command: 'orders', description: 'Aktiv buyurtmalar' },
-    { command: 'help',   description: 'Yordam' }
-  ]});
+
+  // Bot tavsifi va bio
+  await tg('setMyDescription', { description: 'SaTashkent Ta\'minot Bo\'limi boti.\n\nAdmin: ombor nazorati, zakaz tasdiqlash.\nTa\'minotchi: zakaz qabul qilish va schet-faktura yuborish.' });
+  await tg('setMyShortDescription', { short_description: 'SaTashkent — Ta\'minot boshqaruv tizimi' });
+
+  // Admin uchun buyruqlar (chat scope bilan)
+  if (ADMIN_CHAT_ID) {
+    await tg('setMyCommands', {
+      commands: [
+        { command: 'check',  description: '🔍 Ombor holatini tekshirish' },
+        { command: 'orders', description: '📋 Aktiv buyurtmalar' },
+        { command: 'help',   description: '❓ Yordam' }
+      ],
+      scope: { type: 'chat', chat_id: Number(ADMIN_CHAT_ID) }
+    });
+  }
+
+  // Barcha ta'minotchilar uchun buyruqlar
+  const sups = await db.all2("SELECT telegram_chat_id FROM suppliers WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''");
+  for (const s of sups) {
+    await tg('setMyCommands', {
+      commands: [
+        { command: 'myzakaz',  description: '📦 Mening zakazlarim' },
+        { command: 'jarayon',  description: '⏳ Jarayondagi zakazlar' },
+        { command: 'help',     description: '❓ Yordam' }
+      ],
+      scope: { type: 'chat', chat_id: Number(s.telegram_chat_id) }
+    });
+  }
   _polling = true;
   _offset = 0; // navbatdagi xabarlardan boshlab o'qiymiz (birinchi /start ni o'tkazib yubormaslik)
   pollLoop();
