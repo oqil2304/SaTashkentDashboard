@@ -29,6 +29,7 @@ function navigate(section) {
     products:  'Ombor',
     purchases: 'Sotib olishlar',
     consumptions: 'Rasxodlar',
+    orders:    'Buyurtmalar',
     branches:  'Filiallar',
     report:    'Hisobot',
     users:     'Foydalanuvchilar',
@@ -47,6 +48,7 @@ function renderSection(s) {
     case 'products':  renderProducts(c);  break;
     case 'purchases': renderPurchases(c); break;
     case 'consumptions': renderConsumptions(c); break;
+    case 'orders':    renderOrders(c);    break;
     case 'branches':  renderBranches(c);  break;
     case 'report':    renderReport(c);    break;
     case 'users':     renderUsers(c);     break;
