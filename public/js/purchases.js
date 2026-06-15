@@ -48,21 +48,36 @@ function applyPurchaseFilter() {
     if (tot) tot.textContent = '';
     return;
   }
+  const STATUS_LABELS = {
+    manual_pending:   ['⏳ Jarayonda',  '#92400e', '#fffbeb', '#fde68a'],
+    awaiting_invoice: ['📄 Faktura kutilmoqda', '#1e40af', '#eff6ff', '#bfdbfe'],
+    invoice_received: ['✅ Faktura keldi', '#166534', '#f0fdf4', '#bbf7d0'],
+    approved:         ['✅ Tasdiqlangan', '#166534', '#f0fdf4', '#bbf7d0'],
+  };
   let total = 0;
   tbody.innerHTML = list.map(p => {
+    const isPending = !!p._type;
     const sum = (p.quantity || 0) * (p.unit_price || 0);
-    total += sum;
-    return `<tr>
-      <td style="color:#64748b">${esc(p.purchase_date)}</td>
-      <td style="font-weight:600">${esc(p.product_name || '—')}</td>
+    if (!isPending) total += sum;
+    const [slabel, sc, sbg, sbd] = STATUS_LABELS[p.status] || [];
+    const statusBadge = isPending
+      ? `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:${sbg};border:1px solid ${sbd};color:${sc}">${slabel}</span>`
+      : '';
+    const rowStyle = isPending ? 'background:#fffdf0;opacity:.92' : '';
+    return `<tr style="${rowStyle}">
+      <td style="color:#64748b">${esc((p.purchase_date||'').slice(0,10))}</td>
+      <td style="font-weight:600">${esc(p.product_name || '—')} ${statusBadge}</td>
       <td><span class="badge badge-gray">${esc(p.branch_name || '—')}</span></td>
       <td>${p.quantity} ${esc(p.unit || '')}</td>
-      <td>${fmtMoney(p.unit_price)}</td>
-      <td style="font-weight:700;color:var(--teal)">${fmtMoney(sum)}</td>
+      <td>${isPending ? '<span style="color:#94a3b8">—</span>' : fmtMoney(p.unit_price)}</td>
+      <td style="font-weight:700;color:var(--teal)">${isPending ? '<span style="color:#94a3b8">—</span>' : fmtMoney(sum)}</td>
       <td style="color:#64748b">${esc(p.supplier || '—')}</td>
       <td style="white-space:nowrap;text-align:right">
-        <button class="btn btn-sm btn-secondary btn-icon" onclick="openEditPurchase(${p.id})"><i class="ti ti-edit"></i></button>
-        <button class="btn btn-sm btn-danger btn-icon" onclick="delPurchase(${p.id})"><i class="ti ti-trash"></i></button>
+        ${isPending
+          ? `<button class="btn btn-sm btn-danger btn-icon" onclick="cancelOrder(${p.id})" title="Bekor qilish"><i class="ti ti-x"></i></button>`
+          : `<button class="btn btn-sm btn-secondary btn-icon" onclick="openEditPurchase(${p.id})"><i class="ti ti-edit"></i></button>
+             <button class="btn btn-sm btn-danger btn-icon" onclick="delPurchase(${p.id})"><i class="ti ti-trash"></i></button>`
+        }
       </td>
     </tr>`;
   }).join('');
@@ -71,6 +86,34 @@ function applyPurchaseFilter() {
 }
 
 const PURCH_CATS = ['Oziq-ovqat', "Yoqilg'i", "Uy-ro'zg'or", 'Elektr', 'Ofis', 'Boshqa'];
+
+// Ulangan ta'minotchilar dropdown
+function _supDropdown(selId) {
+  const linked = suppliers.filter(s => s.telegram_chat_id);
+  const opts = linked.map(s =>
+    `<option value="${s.id}" ${s.id == selId ? 'selected' : ''}>✅ ${esc(s.name)}</option>`
+  ).join('');
+  return `<select class="form-control" id="xs" onchange="_purchSupChange()">
+    <option value="">— Qo'lda kiritish / Ta'minotchisiz —</option>
+    ${opts}
+    ${!linked.length ? '<option disabled>Ta\'minotchi ulangan emas</option>' : ''}
+  </select>`;
+}
+
+function _purchSupChange() {
+  const val = document.getElementById('xs')?.value;
+  const hint = document.getElementById('xs-hint');
+  if (!hint) return;
+  if (val) {
+    hint.innerHTML = `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 13px;color:#166534">
+      <i class="ti ti-brand-telegram"></i> Ta'minotchiga bot orqali faktura so'raladi. Tovar faktura → to'lov tasdiqlanganidan keyin omborga tushadi.
+    </div>`;
+  } else {
+    hint.innerHTML = `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 13px;color:#166534">
+      <i class="ti ti-info-circle"></i> Sotib olish qoʻshilganda omborga avtomatik qoʻshiladi.
+    </div>`;
+  }
+}
 
 // Filial tanlanganida datalist ni yangilash
 function _purchBranchChange() {
@@ -162,13 +205,12 @@ function _purchModal(title, saveFn, opts = {}) {
         <div class="form-group"><label class="form-label">Sana</label>
           <input class="form-control" id="xd" type="date" value="${opts.purchase_date || today()}"></div>
         <div class="form-group"><label class="form-label">Yetkazib beruvchi</label>
-          <input class="form-control" id="xs" placeholder="Kompaniya nomi" value="${esc(opts.supplier || '')}"></div>
+          ${_supDropdown(opts.supplier_id)}
+        </div>
       </div>
       <div class="form-group"><label class="form-label">Izoh</label>
         <input class="form-control" id="xn" placeholder="Qoʻshimcha maʼlumot" value="${esc(opts.note || '')}"></div>
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 13px;font-size:12px;color:#166534;margin-bottom:4px">
-        <i class="ti ti-info-circle"></i> Sotib olish qoʻshilganda omborga avtomatik qoʻshiladi.
-      </div>
+      <div id="xs-hint" style="font-size:12px;margin-bottom:8px"></div>
       <div class="form-actions">
         <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
         <button class="btn btn-primary" onclick="${saveFn}"><i class="ti ti-check"></i>Saqlash</button>
@@ -176,6 +218,7 @@ function _purchModal(title, saveFn, opts = {}) {
     </div>`);
 
   _purchBranchChange();
+  _purchSupChange();
 }
 
 function openAddPurchase(preId) {
@@ -201,9 +244,11 @@ function openEditPurchase(id) {
 }
 
 async function savePurchase(id) {
-  const brId     = document.getElementById('xbr').value;
-  const pName    = document.getElementById('xp').value.trim();
-  const quantity = parseFloat(document.getElementById('xq').value);
+  const brId      = document.getElementById('xbr').value;
+  const pName     = document.getElementById('xp').value.trim();
+  const quantity  = parseFloat(document.getElementById('xq').value);
+  const suppId    = document.getElementById('xs')?.value || '';
+  const unitPrice = parseFloat(document.getElementById('xpr').value) || 0;
   if (!pName)                     { toast('Mahsulot nomini kiriting', 'error'); return; }
   if (!quantity || quantity <= 0) { toast('Miqdorni kiriting', 'error'); return; }
 
@@ -212,7 +257,7 @@ async function savePurchase(id) {
     p.name.toLowerCase() === pName.toLowerCase() && (!brId || p.branch_id == brId)
   ) || products.find(p => p.name.toLowerCase() === pName.toLowerCase());
 
-  // Omborda yo'q bo'lsa — yangi mahsulot yaratamiz (kunlik sarf=0, ombor=0)
+  // Omborda yo'q bo'lsa — yangi mahsulot yaratamiz
   if (!prod) {
     try {
       prod = await api('POST', '/api/products', {
@@ -223,24 +268,53 @@ async function savePurchase(id) {
         daily_usage: 0,
         current_stock: 0
       });
-      // Lokal massivga qo'shib qo'yamiz (keyingi qadam uchun)
       products.push(prod);
     } catch (e) { toast('Mahsulot yaratishda xato: ' + e.message, 'error'); return; }
   }
 
+  // Ulangan ta'minotchi tanlangan → bot orqali buyurtma
+  if (suppId && !id) {
+    try {
+      await api('POST', '/api/purchases/manual-order', {
+        product_id:  prod.id,
+        quantity,
+        unit_price:  unitPrice,
+        supplier_id: suppId,
+        note:        document.getElementById('xn')?.value || ''
+      });
+      toast("Ta'minotchiga faktura so'rovi yuborildi ✅");
+      closeModal(true);
+      await loadAll();
+      renderSection(currentSection);
+    } catch (e) { toast(e.message, 'error'); }
+    return;
+  }
+
+  // Oddiy — to'g'ridan-to'g'ri omborga
+  const sup = suppId ? (suppliers.find(s => s.id == suppId)?.name || '') : '';
   const body = {
     product_id:    prod.id,
     quantity,
-    unit_price:    parseFloat(document.getElementById('xpr').value) || 0,
-    purchase_date: document.getElementById('xd').value || today(),
-    supplier:      document.getElementById('xs').value,
-    note:          document.getElementById('xn').value
+    unit_price:    unitPrice,
+    purchase_date: document.getElementById('xd')?.value || today(),
+    supplier:      sup,
+    note:          document.getElementById('xn')?.value || ''
   };
   try {
     if (id) await api('PUT', `/api/purchases/${id}`, body);
     else    await api('POST', '/api/purchases', body);
     toast(id ? 'Yangilandi' : "Qoʻshildi");
     closeModal(true);
+    await loadAll();
+    renderSection(currentSection);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function cancelOrder(id) {
+  if (!confirm('Buyurtmani bekor qilasizmi?')) return;
+  try {
+    await api('PUT', `/api/supply-orders/${id}/cancel`);
+    toast('Bekor qilindi');
     await loadAll();
     renderSection(currentSection);
   } catch (e) { toast(e.message, 'error'); }

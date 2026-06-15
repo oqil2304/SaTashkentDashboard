@@ -7,7 +7,7 @@ const path         = require('path');
 const fs           = require('fs');
 const multer       = require('multer');
 const { db, init, saveDb } = require('./db');
-const { startBot, notifyLowStock, completeOrder, getBotUsername } = require('./bot');
+const { startBot, notifyLowStock, completeOrder, sendToSupplier, getBotUsername } = require('./bot');
 
 // Avatar upload konfiguratsiyasi
 const avatarStorage = multer.diskStorage({
@@ -331,7 +331,7 @@ app.delete('/api/products/:id', auth, adminOnly, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Purchases
+// Purchases — haqiqiy xaridlar + jarayondagi buyurtmalar (supply_orders)
 app.get('/api/purchases', auth, async (req, res) => {
   let sql = `SELECT pu.*,pr.name as product_name,pr.unit,b.name as branch_name,b.id as branch_id
              FROM purchases pu LEFT JOIN products pr ON pu.product_id=pr.id LEFT JOIN branches b ON pr.branch_id=b.id WHERE 1=1`;
@@ -344,8 +344,20 @@ app.get('/api/purchases', auth, async (req, res) => {
     const brId = await getUserBranchId(req.user.id);
     if (brId) { sql += ' AND b.id=?'; params.push(brId); }
   }
-  try { res.json(await db.all2(sql + ' ORDER BY pu.purchase_date DESC,pu.id DESC', params)); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const done = await db.all2(sql + ' ORDER BY pu.purchase_date DESC,pu.id DESC', params);
+    // Jarayondagi buyurtmalarni ham qo'shamiz (manual yoki bot orqali)
+    const pending = await db.all2(
+      `SELECT so.id, so.product_id, so.product_name, so.qty AS quantity, so.unit,
+              so.unit_price, so.supplier_name AS supplier, so.status, so.note,
+              so.created_at AS purchase_date, NULL AS branch_id, NULL AS branch_name,
+              '_order' AS _type, so.supplier_id
+       FROM supply_orders so
+       WHERE so.status NOT IN ('delivered','cancelled')
+       ORDER BY so.created_at DESC LIMIT 100`
+    );
+    res.json([...pending, ...done]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post('/api/purchases', auth, canWrite, async (req, res) => {
   const { product_id, quantity, unit_price, purchase_date, supplier, note } = req.body;
@@ -530,12 +542,43 @@ app.get('/api/suppliers/:id/link', auth, adminOnly, async (req, res) => {
   res.json({ link: `https://t.me/${botUsername}?start=supplier_${req.params.id}` });
 });
 
+// Qo'lda yaratilgan buyurtma — ta'minotchiga bot orqali xabar yuboradi
+app.post('/api/purchases/manual-order', auth, canWrite, async (req, res) => {
+  const { product_id, quantity, unit_price, supplier_id, note } = req.body;
+  if (!product_id || !quantity || !supplier_id) return res.status(400).json({ error: 'Mahsulot, miqdor va ta\'minotchi kerak' });
+  try {
+    const prod = await db.get2('SELECT * FROM products WHERE id=?', [product_id]);
+    const sup  = await db.get2('SELECT * FROM suppliers WHERE id=?', [supplier_id]);
+    if (!prod) return res.status(404).json({ error: 'Mahsulot topilmadi' });
+    if (!sup)  return res.status(404).json({ error: 'Ta\'minotchi topilmadi' });
+    if (!sup.telegram_chat_id) return res.status(400).json({ error: 'Ta\'minotchi botga ulanmagan' });
+    const r = await db.run2(
+      `INSERT INTO supply_orders (product_id, product_name, qty, unit, unit_price, supplier_id, supplier_name, supplier_chat_id, status, note, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+      [product_id, prod.name, quantity, prod.unit || '', unit_price || 0,
+       sup.id, sup.name, sup.telegram_chat_id, 'manual_pending', note || '']
+    );
+    saveDb();
+    const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [r.lastID]);
+    await sendToSupplier(order);
+    res.status(201).json(order);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Buyurtmalar (supply_orders) API ─────────────────────────────────────
 app.get('/api/supply-orders', auth, async (req, res) => {
   try {
     res.json(await db.all2(
       `SELECT * FROM supply_orders ORDER BY created_at DESC LIMIT 200`
     ));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/supply-orders/:id/cancel', auth, canWrite, async (req, res) => {
+  try {
+    await db.run2("UPDATE supply_orders SET status='cancelled', updated_at=datetime('now') WHERE id=?", [req.params.id]);
+    saveDb();
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

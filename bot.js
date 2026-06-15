@@ -496,4 +496,4 @@ async function startBot() {
   console.log(`[bot] ✅ Bot ishga tushdi: @${me.username} (long polling)`);
 }
 
-module.exports = { startBot, notifyLowStock, completeOrder, getBotUsername: () => _botUsername };
+module.exports = { startBot, notifyLowStock, completeOrder, sendToSupplier, getBotUsername: () => _botUsername };
