@@ -123,6 +123,32 @@ function _purchBranchChange() {
   const prods = brId ? products.filter(p => p.branch_id == brId) : products;
   dl.innerHTML = prods.map(p => `<option value="${esc(p.name)}"></option>`).join('');
   _purchProductChange();
+  _autoFillSupplier();
+}
+
+// Mahsulot va filialga qarab ta'minotchini avtomatik tanlash
+function _autoFillSupplier() {
+  const brId  = document.getElementById('xbr')?.value;
+  const pName = (document.getElementById('xp')?.value || '').trim();
+  const xs    = document.getElementById('xs');
+  if (!xs || !pName) return;
+
+  const prod = products.find(p =>
+    p.name.toLowerCase() === pName.toLowerCase() && (!brId || p.branch_id == brId)
+  ) || products.find(p => p.name.toLowerCase() === pName.toLowerCase());
+
+  if (!prod || !prod.supplier_id) return;
+
+  const sup = suppliers.find(s => s.id == prod.supplier_id && s.telegram_chat_id);
+  if (!sup) return;
+
+  const bids = sup.branch_ids ? String(sup.branch_ids).split(',').map(x => x.trim()) : [];
+  if (bids.length && brId && !bids.includes(String(brId))) return;
+
+  if (xs.value !== String(sup.id)) {
+    xs.value = String(sup.id);
+    _purchSupChange();
+  }
 }
 
 // Mahsulot nomi yozilganda — omborada bormi yo'qligini aniqlash
@@ -148,6 +174,7 @@ function _purchProductChange() {
       hint.innerHTML = `<i class="ti ti-info-circle"></i> Omborда yo'q — yangi mahsulot yaratiladi`;
     }
   }
+  _autoFillSupplier();
 }
 
 function _purchModal(title, saveFn, opts = {}) {
