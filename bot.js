@@ -47,6 +47,8 @@ async function getFileLink(fileId) {
 }
 
 // ── Sessiyalar (xotirada) ──────────────────────────────────────────────────
+let _botUsername = '';
+
 const approvalSessions = new Map();  // message_id → { items, chat_id }
 const pendingInvoices  = new Map();  // supplier_chat_id → { order_id, ... }
 
@@ -329,10 +331,12 @@ async function startBot() {
   await tg('deleteWebhook', { drop_pending_updates: false });
   const me = await tg('getMe');
   if (!me) { console.log('[bot] ❌ Token noto\'g\'ri yoki internet yo\'q — bot ishlamadi'); return; }
+  _botUsername = me.username || '';
+  console.log(`[bot] ✅ @${_botUsername} tayyor`);
   _polling = true;
   _offset = 0; // navbatdagi xabarlardan boshlab o'qiymiz (birinchi /start ni o'tkazib yubormaslik)
   pollLoop();
   console.log(`[bot] ✅ Bot ishga tushdi: @${me.username} (long polling)`);
 }
 
-module.exports = { startBot, notifyLowStock, completeOrder };
+module.exports = { startBot, notifyLowStock, completeOrder, getBotUsername: () => _botUsername };

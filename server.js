@@ -7,7 +7,7 @@ const path         = require('path');
 const fs           = require('fs');
 const multer       = require('multer');
 const { db, init, saveDb } = require('./db');
-const { startBot, notifyLowStock, completeOrder } = require('./bot');
+const { startBot, notifyLowStock, completeOrder, getBotUsername } = require('./bot');
 
 // Avatar upload konfiguratsiyasi
 const avatarStorage = multer.diskStorage({
@@ -525,7 +525,8 @@ app.delete('/api/suppliers/:id', auth, adminOnly, async (req, res) => {
 
 // Ta'minotchi ulash yo'riqnomasi
 app.get('/api/suppliers/:id/link', auth, adminOnly, async (req, res) => {
-  const botUsername = process.env.BOT_USERNAME || 'satashkent_taminot_bot';
+  const botUsername = getBotUsername() || process.env.BOT_USERNAME || '';
+  if (!botUsername) return res.status(503).json({ error: 'Bot hali ishga tushmagan, biroz kuting' });
   res.json({ link: `https://t.me/${botUsername}?start=supplier_${req.params.id}` });
 });
 
