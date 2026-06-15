@@ -9,13 +9,15 @@ async function loadAll() {
     api('GET', '/api/purchases'),
     api('GET', '/api/categories'),
     api('GET', '/api/consumptions'),
+    api('GET', '/api/suppliers').catch(() => []),
   ]);
   branches     = results[0];
   products     = results[1];
   purchases    = results[2];
   categories   = results[3];
   consumptions = results[4];
-  console.log('[main.js] loadAll tugadi — branches:', branches.length, 'products:', products.length, 'purchases:', purchases.length);
+  suppliers    = results[5];
+  console.log('[main.js] loadAll tugadi — branches:', branches.length, 'products:', products.length);
   updateAlertBadge();
 }
 
@@ -30,6 +32,7 @@ function navigate(section) {
     purchases: 'Sotib olishlar',
     consumptions: 'Rasxodlar',
     branches:  'Filiallar',
+    suppliers: 'Ta\'minotchilar',
     report:    'Hisobot',
     users:     'Foydalanuvchilar',
     profile:   'Shaxsiy kabinet'
@@ -48,6 +51,7 @@ function renderSection(s) {
     case 'purchases': renderPurchases(c); break;
     case 'consumptions': renderConsumptions(c); break;
     case 'branches':  renderBranches(c);  break;
+    case 'suppliers': renderSuppliers(c); break;
     case 'report':    renderReport(c);    break;
     case 'users':     renderUsers(c);     break;
     case 'profile':   renderProfile(c);   break;

@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express      = require('express');
 const cookieParser = require('cookie-parser');
 const bcrypt       = require('bcryptjs');
@@ -5,7 +6,8 @@ const jwt          = require('jsonwebtoken');
 const path         = require('path');
 const fs           = require('fs');
 const multer       = require('multer');
-const { db, init } = require('./db');
+const { db, init, saveDb } = require('./db');
+const { startBot, notifyLowStock } = require('./bot');
 
 // Avatar upload konfiguratsiyasi
 const avatarStorage = multer.diskStorage({
@@ -302,21 +304,21 @@ app.get('/api/products', auth, async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post('/api/products', auth, canWrite, async (req, res) => {
-  const { branch_id, name, category, unit, daily_usage, current_stock, min_stock, note } = req.body;
+  const { branch_id, name, category, unit, daily_usage, current_stock, min_stock, supplier_id, note } = req.body;
   if (!name) return res.status(400).json({ error: 'Nomi kerak' });
   try {
     const r = await db.run2(
-      'INSERT INTO products (branch_id,name,category,unit,daily_usage,current_stock,min_stock,note) VALUES (?,?,?,?,?,?,?,?)',
-      [branch_id||null, name, category||'', unit||'', daily_usage||0, current_stock||0, min_stock||0, note||'']
+      'INSERT INTO products (branch_id,name,category,unit,daily_usage,current_stock,min_stock,supplier_id,note) VALUES (?,?,?,?,?,?,?,?,?)',
+      [branch_id||null, name, category||'', unit||'', daily_usage||0, current_stock||0, min_stock||0, supplier_id||null, note||'']
     );
     res.status(201).json(await db.get2('SELECT p.*,b.name as branch_name FROM products p LEFT JOIN branches b ON p.branch_id=b.id WHERE p.id=?', [r.lastID]));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.put('/api/products/:id', auth, canWrite, async (req, res) => {
-  const { branch_id, name, category, unit, daily_usage, current_stock, min_stock, note } = req.body;
+  const { branch_id, name, category, unit, daily_usage, current_stock, min_stock, supplier_id, note } = req.body;
   try {
-    await db.run2('UPDATE products SET branch_id=?,name=?,category=?,unit=?,daily_usage=?,current_stock=?,min_stock=?,note=? WHERE id=?',
-      [branch_id||null, name, category||'', unit||'', daily_usage||0, current_stock||0, min_stock||0, note||'', req.params.id]);
+    await db.run2('UPDATE products SET branch_id=?,name=?,category=?,unit=?,daily_usage=?,current_stock=?,min_stock=?,supplier_id=?,note=? WHERE id=?',
+      [branch_id||null, name, category||'', unit||'', daily_usage||0, current_stock||0, min_stock||0, supplier_id||null, note||'', req.params.id]);
     res.json(await db.get2('SELECT p.*,b.name as branch_name FROM products p LEFT JOIN branches b ON p.branch_id=b.id WHERE p.id=?', [req.params.id]));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -481,10 +483,87 @@ app.get('/api/report', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Ta'minotchilar API ────────────────────────────────────────────────────
+app.get('/api/suppliers', auth, async (req, res) => {
+  try { res.json(await db.all2('SELECT * FROM suppliers ORDER BY name')); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/suppliers', auth, adminOnly, async (req, res) => {
+  try {
+    const { name, telegram_chat_id, telegram_username, phone, products_note, note } = req.body;
+    if (!name) return res.status(400).json({ error: 'Ism kerak' });
+    const r = await db.run2(
+      `INSERT INTO suppliers (name, telegram_chat_id, telegram_username, phone, products_note, note, created_at)
+       VALUES (?,?,?,?,?,?,datetime('now'))`,
+      [name, telegram_chat_id || '', telegram_username || '', phone || '', products_note || '', note || '']
+    );
+    saveDb();
+    res.json({ id: r.lastID });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/suppliers/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const { name, telegram_chat_id, telegram_username, phone, products_note, note } = req.body;
+    await db.run2(
+      `UPDATE suppliers SET name=?, telegram_chat_id=?, telegram_username=?, phone=?, products_note=?, note=? WHERE id=?`,
+      [name, telegram_chat_id || '', telegram_username || '', phone || '', products_note || '', note || '', req.params.id]
+    );
+    saveDb();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/suppliers/:id', auth, adminOnly, async (req, res) => {
+  try {
+    await db.run2('DELETE FROM suppliers WHERE id=?', [req.params.id]);
+    saveDb();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Ta'minotchi ulash yo'riqnomasi
+app.get('/api/suppliers/:id/link', auth, adminOnly, async (req, res) => {
+  const botUsername = process.env.BOT_USERNAME || 'satashkent_taminot_bot';
+  res.json({ link: `https://t.me/${botUsername}?start=supplier_${req.params.id}` });
+});
+
+// ── Buyurtmalar (supply_orders) API ─────────────────────────────────────
+app.get('/api/supply-orders', auth, async (req, res) => {
+  try {
+    res.json(await db.all2(
+      `SELECT * FROM supply_orders ORDER BY created_at DESC LIMIT 200`
+    ));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin ombor tekshiruvi — botga buyurtma ro'yxatini yuborish
+app.post('/api/bot/check-stock', auth, adminOnly, async (req, res) => {
+  try {
+    await notifyLowStock(true);
+    res.json({ ok: true, message: 'Tekshiruv bajarildi — Telegram ga yuborildi' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Finance saytdan webhook
+app.post('/api/bot/finance-webhook', async (req, res) => {
+  try {
+    const { order_id, status, payment_ref } = req.body;
+    if (status === 'paid') {
+      const { completeOrder } = require('./bot');
+      if (typeof completeOrder === 'function') await completeOrder(order_id);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 init().then(async () => {
   // Kunlik sarf tizimini ishga tushirish (server start bo'lganda)
   await catchUpDailyConsumptions();
   scheduleDailyConsumption();
+  // Telegram bot ishga tushirish
+  startBot();
   app.listen(PORT, () => {
     console.log(`🚀 SaTashkent Dashboard → http://localhost:${PORT}`);
     console.log('   Login: admin / admin123');

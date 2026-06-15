@@ -73,6 +73,12 @@ function applyProductFilter() {
 
 const CAT_LIST = ['Oziq-ovqat', "Yoqilg'i", "Uy-ro'zg'or", 'Elektr', 'Ofis', 'Boshqa'];
 
+function _supOpts(selId) {
+  const none = `<option value="">— Ta'minotchi yo'q —</option>`;
+  return none + (typeof suppliers !== 'undefined' ? suppliers : [])
+    .map(s => `<option value="${s.id}" ${s.id == selId ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
+}
+
 function openAddProduct() {
   const brOpts  = branches.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('');
   const catOpts = CAT_LIST.map(c => `<option>${esc(c)}</option>`).join('');
@@ -99,8 +105,12 @@ function openAddProduct() {
         <div class="form-group"><label class="form-label">Kunlik sarflanish (ixtiyoriy)</label>
           <input class="form-control" id="md" type="number" step="0.1" placeholder="0 — faqat kerakda ishlatiladi"></div>
       </div>
-      <div class="form-group"><label class="form-label">Izoh</label>
-        <input class="form-control" id="mnote" placeholder="Qoʻshimcha maʼlumot"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Ta'minotchi (Bot uchun)</label>
+          <select class="form-control" id="msup">${_supOpts(null)}</select></div>
+        <div class="form-group"><label class="form-label">Izoh</label>
+          <input class="form-control" id="mnote" placeholder="Qoʻshimcha maʼlumot"></div>
+      </div>
       <div class="form-actions">
         <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
         <button class="btn btn-primary" onclick="saveProduct(null)"><i class="ti ti-check"></i>Saqlash</button>
@@ -136,8 +146,12 @@ function openEditProduct(id) {
         <div class="form-group"><label class="form-label">Kunlik sarflanish (ixtiyoriy)</label>
           <input class="form-control" id="md" type="number" step="0.1" value="${p.daily_usage || ''}" placeholder="0 — faqat kerakda ishlatiladi"></div>
       </div>
-      <div class="form-group"><label class="form-label">Izoh</label>
-        <input class="form-control" id="mnote" value="${esc(p.note || '')}"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Ta'minotchi (Bot uchun)</label>
+          <select class="form-control" id="msup">${_supOpts(p.supplier_id)}</select></div>
+        <div class="form-group"><label class="form-label">Izoh</label>
+          <input class="form-control" id="mnote" value="${esc(p.note || '')}"></div>
+      </div>
       <div class="form-actions">
         <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
         <button class="btn btn-primary" onclick="saveProduct(${id})"><i class="ti ti-check"></i>Saqlash</button>
@@ -154,6 +168,7 @@ async function saveProduct(id) {
     unit:          document.getElementById('mu').value,
     current_stock: parseFloat(document.getElementById('ms').value) || 0,
     daily_usage:   parseFloat(document.getElementById('md').value) || 0,
+    supplier_id:   document.getElementById('msup')?.value || null,
     note:          document.getElementById('mnote').value
   };
   try {

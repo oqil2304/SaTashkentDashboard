@@ -50,8 +50,37 @@ async function init() {
   sqlDb.run(`CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, unit_price REAL, purchase_date TEXT, supplier TEXT, note TEXT, created_at TEXT DEFAULT (datetime('now')))`);
   sqlDb.run(`CREATE TABLE IF NOT EXISTS consumptions (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, from_branch_id INTEGER, to_branch_id INTEGER, consume_date TEXT, note TEXT, unit_price REAL DEFAULT 0, created_at TEXT DEFAULT (datetime('now')))`);
   sqlDb.run(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS suppliers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    telegram_chat_id TEXT,
+    telegram_username TEXT,
+    phone TEXT,
+    products_note TEXT,
+    note TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS supply_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER,
+    product_name TEXT,
+    qty REAL,
+    unit TEXT,
+    unit_price REAL DEFAULT 0,
+    supplier_id INTEGER,
+    supplier_name TEXT,
+    supplier_chat_id TEXT,
+    status TEXT DEFAULT 'pending_admin',
+    invoice_file_id TEXT,
+    finance_ref TEXT,
+    payment_check_file_id TEXT,
+    note TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
 
-  // ── users jadvalini yangilash (eski bazada yangi ustunlar boʻlmasligi mumkin) ──
+  // ── Yangi ustunlar (eski bazada bo'lmasligi mumkin) ──────────────────────────
+  ensureColumn('products', 'supplier_id', 'INTEGER');
   ensureColumn('users', 'email', 'TEXT');
   ensureColumn('users', 'phone', 'TEXT');
   ensureColumn('users', 'full_name', 'TEXT');
@@ -257,4 +286,4 @@ async function fifoInitRemainingQty() {
   saveDb();
 }
 
-module.exports = { db, init };
+module.exports = { db, init, saveDb };

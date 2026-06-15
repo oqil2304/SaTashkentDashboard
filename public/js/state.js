@@ -7,6 +7,7 @@ let products   = [];
 let purchases  = [];
 let consumptions = [];
 let categories = [];
+let suppliers  = [];
 let currentUser = null;
 let users = [];
 

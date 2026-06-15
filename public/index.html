@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SaTashkent – Boshqaruv Paneli</title>
-  <!-- Shrift CDN dan (bloklamaydigan). Ikonkalar esa loyiha ichida (icons.js) — internet kerak emas. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'" />
@@ -43,3 +42,91 @@
         <i class="ti ti-package-export nav-icon"></i>
         <span>Rasxodlar</span>
       </a>
+      <a class="nav-item" data-section="branches" href="#">
+        <i class="ti ti-building-store nav-icon"></i>
+        <span>Filiallar</span>
+      </a>
+      <a class="nav-item" data-section="suppliers" href="#">
+        <i class="ti ti-brand-telegram nav-icon"></i>
+        <span>Ta'minotchilar</span>
+      </a>
+      <a class="nav-item" data-section="report" href="#">
+        <i class="ti ti-chart-bar nav-icon"></i>
+        <span>Hisobot</span>
+      </a>
+      <a class="nav-item admin-only" data-section="users" href="#" style="display:none">
+        <i class="ti ti-users nav-icon"></i>
+        <span>Foydalanuvchilar</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user" id="sidebar-user-btn" title="Shaxsiy kabinet" style="cursor:pointer;flex:1" onclick="navigate('profile')">
+        <div class="sidebar-avatar" id="user-avatar">A</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-username" id="sidebar-username">Admin</div>
+          <div class="sidebar-role" id="sidebar-role">Administrator</div>
+        </div>
+      </div>
+      <button class="btn-logout" id="logout-btn" title="Chiqish">
+        <i class="ti ti-logout"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main-wrap">
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle">
+        <i class="ti ti-menu-2"></i>
+      </button>
+      <h1 class="page-title" id="page-title">Umumiy ko'rinish</h1>
+      <div class="topbar-actions">
+        <div class="lang-switch" id="lang-switch">
+          <button data-lang="uz">UZ</button>
+          <button data-lang="ru">RU</button>
+          <button data-lang="en">EN</button>
+        </div>
+        <button class="alert-btn" id="alert-btn" title="Ogohlantirishlar">
+          <i class="ti ti-bell"></i>
+          <span class="alert-badge" id="alert-count" style="display:none">0</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="content" id="content">
+      <div class="loading-state">
+        <i class="ti ti-loader-2 spin"></i>
+        <span>Yuklanmoqda...</span>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+    <div class="modal-box" id="modal-box"></div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Modullar -->
+  <script src="/js/state.js?v=19"></script>
+  <script src="/js/i18n.js?v=19"></script>
+  <script src="/js/icons.js?v=19"></script>
+  <script src="/js/api.js?v=19"></script>
+  <script src="/js/helpers.js?v=19"></script>
+  <script src="/js/ui.js?v=19"></script>
+  <script src="/js/tablesort.js?v=19"></script>
+  <script src="/js/overview.js?v=19"></script>
+  <script src="/js/products.js?v=19"></script>
+  <script src="/js/purchases.js?v=19"></script>
+  <script src="/js/consumptions.js?v=19"></script>
+  <script src="/js/branches.js?v=19"></script>
+  <script src="/js/suppliers.js?v=19"></script>
+  <script src="/js/report.js?v=19"></script>
+  <script src="/js/users.js?v=19"></script>
+  <script src="/js/profile.js?v=19"></script>
+  <script src="/js/main.js?v=19"></script>
+</body>
+</html>
