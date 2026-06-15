@@ -50,11 +50,28 @@ async function getFileLink(fileId) {
 let _botUsername = '';
 
 const approvalSessions = new Map();  // message_id → { items, chat_id }
-const pendingInvoices  = new Map();  // supplier_chat_id → { order_id, ... }
+const pendingInvoices  = new Map();  // supplier_chat_id → [ {order_id, msg_id, ...}, ... ] (FIFO navbat)
+const invoiceByReply   = new Map();  // bot_msg_id → entry  (ta'minotchi reply qilsa aniq topiladi)
 const adminQtyFlow     = new Map();  // admin chat_id → { items, idx }
-const pendingChecks    = new Map();  // admin chat_id → { order_id, supplier_chat_id, ... }
+const pendingChecks    = new Map();  // admin chat_id → [ {order_id, prompt_msg_id, ...}, ... ] (FIFO navbat)
+const checkByReply     = new Map();  // bot_prompt_msg_id → entry
 
 const adminOnly = (chatId) => String(chatId) === ADMIN_CHAT_ID;
+
+// ── FIFO navbat yordamchilari (bir vaqtda bir nechta zakazni qo'llab-quvvatlash) ─
+function _qGet(map, key) { return map.get(String(key)) || []; }
+function _qPush(map, key, val) {
+  const k = String(key);
+  if (!map.has(k)) map.set(k, []);
+  map.get(k).push(val);
+}
+function _qRemove(map, key, orderId) {
+  const k = String(key); const arr = map.get(k);
+  if (!arr) return;
+  const i = arr.findIndex(x => x.order_id === orderId);
+  if (i >= 0) arr.splice(i, 1);
+  if (!arr.length) map.delete(k);
+}
 
 // Zakaz holatlari uchun chiroyli yorliqlar
 const ORDER_STATUS = {
@@ -85,7 +102,9 @@ function normName(s) {
 
 function qtyForOrder(p) {
   const TARGET_DAYS = 30;
-  const raw = Math.max(0, TARGET_DAYS * (p.daily_usage || 0) - (p.current_stock || 0));
+  let raw = Math.max(0, TARGET_DAYS * (p.daily_usage || 0) - (p.current_stock || 0));
+  // Kunlik sarfi noma'lum, lekin tovar tugagan — kamida 1 birlik taklif qilamiz
+  if (raw <= 0 && (p.current_stock || 0) <= 0) raw = 1;
   const isWhole = /dona|quti|rulon|pachka|metr/i.test(p.unit || '');
   return isWhole ? Math.ceil(raw) : Math.ceil(raw * 10) / 10;
 }
@@ -123,8 +142,10 @@ async function getLowStockProducts() {
            s.telegram_chat_id AS supplier_chat_id
     FROM products p
     LEFT JOIN suppliers s ON s.id = p.supplier_id
-    WHERE p.daily_usage > 0 AND (p.current_stock / p.daily_usage) <= 7
-    ORDER BY (p.current_stock / p.daily_usage) ASC`);
+    WHERE (p.daily_usage > 0 AND (p.current_stock / p.daily_usage) <= 7)
+       OR (p.current_stock <= 0)
+    ORDER BY CASE WHEN p.current_stock <= 0 THEN 0 ELSE 1 END,
+             CASE WHEN p.daily_usage > 0 THEN p.current_stock / p.daily_usage ELSE 999999 END ASC`);
   const active = await db.all2(
     "SELECT product_id, members_json FROM supply_orders WHERE status NOT IN ('delivered','cancelled')");
   const activeIds = new Set();
@@ -145,7 +166,7 @@ async function notifyLowStock(forceCheck = false) {
   const raw = prods.map(p => ({
     product_id: p.id, name: p.name, unit: p.unit || '', qty: qtyForOrder(p),
     stock: p.current_stock || 0,
-    days_left: p.daily_usage > 0 ? p.current_stock / p.daily_usage : Infinity,
+    days_left: (p.current_stock || 0) <= 0 ? 0 : (p.daily_usage > 0 ? p.current_stock / p.daily_usage : Infinity),
     supplier_id: p.supplier_id || null, supplier_name: p.supplier_name || null,
     supplier_chat_id: p.supplier_chat_id || null
   }));
@@ -189,12 +210,16 @@ async function sendToSupplier(order) {
   const text = `🏪 <b>SaTashkent Ta'minot Bo'limidan zakaz</b>\n\n` +
     `Salom, <b>${order.supplier_name}</b>!\n\n` +
     `${body}\n` +
-    `Schet-faktura yuboring — imkon qadar tezroq.\nRahmat! 🙏`;
+    `Schet-faktura yuboring — imkon qadar tezroq.\n` +
+    `<i>💡 Bir nechta zakaz bo'lsa, fakturani aynan shu xabarga "reply" qilib yuboring.</i>\nRahmat! 🙏`;
   const sent = await sendMessage(order.supplier_chat_id, text);
   if (!sent) return false;
-  pendingInvoices.set(String(order.supplier_chat_id), {
-    order_id: order.id, product_name: order.product_name, qty: order.qty, unit: order.unit
-  });
+  const entry = {
+    order_id: order.id, product_name: order.product_name, qty: order.qty, unit: order.unit,
+    msg_id: sent.message_id
+  };
+  _qPush(pendingInvoices, order.supplier_chat_id, entry);
+  invoiceByReply.set(sent.message_id, entry);
   await db.run2("UPDATE supply_orders SET status='awaiting_invoice', updated_at=datetime('now') WHERE id=?", [order.id]);
   saveDb();
   return true;
@@ -421,12 +446,17 @@ async function handleMessage(msg) {
       return;
     }
 
-    // 2) To'lov cheki kutilmoqda
-    const check = pendingChecks.get(chatId);
-    if (check) {
+    // 2) To'lov cheki kutilmoqda (bir vaqtda bir nechta bo'lishi mumkin)
+    const checks = _qGet(pendingChecks, chatId);
+    if (checks.length) {
+      // Qaysi zakaz uchun? reply qilingan bo'lsa — aniq, aks holda navbatdagi birinchisi (FIFO)
+      const rid = msg.reply_to_message?.message_id;
+      const check = (rid && checkByReply.get(rid)) || checks[0];
+
       if (/^skip$/i.test((text || '').trim())) {
-        pendingChecks.delete(chatId);
-        await sendMessage(chatId, '🧾 Cheksiz yakunlanmoqda...');
+        _qRemove(pendingChecks, chatId, check.order_id);
+        if (check.prompt_msg_id) checkByReply.delete(check.prompt_msg_id);
+        await sendMessage(chatId, `🧾 <b>${check.product_name}</b> cheksiz yakunlanmoqda...`);
         await completeOrder(check.order_id);
         return;
       }
@@ -434,13 +464,16 @@ async function handleMessage(msg) {
       if (msg.document) fileId = msg.document.file_id;
       else if (msg.photo) fileId = msg.photo[msg.photo.length - 1].file_id;
       if (!fileId) { await sendMessage(chatId, '🧾 To\'lov chekini rasm yoki PDF ko\'rinishida yuboring (yoki <b>skip</b> deb yozing).'); return; }
-      pendingChecks.delete(chatId);
+      _qRemove(pendingChecks, chatId, check.order_id);
+      if (check.prompt_msg_id) checkByReply.delete(check.prompt_msg_id);
       if (check.supplier_chat_id) {
         await sendMessage(check.supplier_chat_id, `✅ <b>${check.product_name}</b> (${check.qty} ${check.unit}) uchun to'lov amalga oshirildi! To'lov cheki:`);
         await forwardMessage(check.supplier_chat_id, msg.chat.id, msg.message_id);
         await db.run2('UPDATE supply_orders SET payment_check_file_id=? WHERE id=?', [fileId, check.order_id]);
         saveDb();
-        await sendMessage(chatId, '🧾 Chek ta\'minotchiga yuborildi.');
+        const remaining = _qGet(pendingChecks, chatId).length;
+        await sendMessage(chatId, `🧾 <b>${check.product_name}</b> cheki ta'minotchiga yuborildi.` +
+          (remaining ? `\n📌 Yana ${remaining} ta zakaz uchun chek kutilmoqda.` : ''));
       }
       await completeOrder(check.order_id);
       return;
@@ -472,8 +505,12 @@ async function handleMessage(msg) {
   }
 
   // Ta'minotchidan faktura (admin emas + kutilayotgan zakaz bor)
-  const pending = pendingInvoices.get(chatId);
-  if (!pending) return;
+  const queue = _qGet(pendingInvoices, chatId);
+  if (!queue.length) return;
+
+  // Qaysi zakaz uchun? reply qilingan bo'lsa — aniq, aks holda navbatdagi birinchisi (FIFO)
+  const rid = msg.reply_to_message?.message_id;
+  const pending = (rid && invoiceByReply.get(rid)) || queue[0];
 
   let fileId = null, mimeType = 'image/jpeg';
   if (msg.document) { fileId = msg.document.file_id; mimeType = msg.document.mime_type || 'application/pdf'; }
@@ -483,8 +520,11 @@ async function handleMessage(msg) {
 
   await db.run2("UPDATE supply_orders SET invoice_file_id=?, status='invoice_received', updated_at=datetime('now') WHERE id=?", [fileId, pending.order_id]);
   saveDb();
-  pendingInvoices.delete(chatId);
-  await sendMessage(chatId, "✅ Schet-faktura qabul qilindi! Tez orada to'lov amalga oshiriladi.");
+  _qRemove(pendingInvoices, chatId, pending.order_id);
+  if (pending.msg_id) invoiceByReply.delete(pending.msg_id);
+  const remainingInv = _qGet(pendingInvoices, chatId).length;
+  await sendMessage(chatId, `✅ <b>${pending.product_name}</b> uchun schet-faktura qabul qilindi! Tez orada to'lov amalga oshiriladi.` +
+    (remainingInv ? `\n\n📌 Yana ${remainingInv} ta zakaz uchun faktura kutilmoqda.` : ''));
 
   if (ADMIN_CHAT_ID) {
     await sendMessage(ADMIN_CHAT_ID, `📄 <b>${pending.product_name}</b> uchun schet-faktura keldi!\nTa'minotchi: ${msg.from.first_name || chatId}\nMiqdor: ${pending.qty} ${pending.unit}`);
@@ -514,14 +554,18 @@ async function handleCallback(query) {
     await editMessageReplyMarkup(chatId, msgId, { inline_keyboard: [] });
     const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [orderId]);
     if (!order) { await sendMessage(chatId, '❌ Buyurtma topilmadi.'); return; }
-    pendingChecks.set(String(chatId), {
-      order_id: orderId, supplier_chat_id: order.supplier_chat_id,
-      product_name: order.product_name, qty: order.qty, unit: order.unit
-    });
-    await sendMessage(chatId,
+    const prompt = await sendMessage(chatId,
       `🧾 <b>${order.product_name}</b> — to'lov chekini (rasm yoki PDF) yuboring.\n` +
-      `U ta'minotchiga yuboriladi va tovar omborga kiritiladi.\n\n` +
-      `(Cheksiz davom ettirish uchun <b>skip</b> deb yozing)`);
+      `U ta'minotchiga yuboriladi va tovar omborga kiritiladi.\n` +
+      `<i>💡 Bir nechta to'lov bo'lsa, chekni aynan shu xabarga "reply" qiling.</i>\n\n` +
+      `(Cheksiz davom ettirish uchun shu xabarga <b>skip</b> deb yozing)`);
+    const entry = {
+      order_id: orderId, supplier_chat_id: order.supplier_chat_id,
+      product_name: order.product_name, qty: order.qty, unit: order.unit,
+      prompt_msg_id: prompt?.message_id
+    };
+    _qPush(pendingChecks, chatId, entry);
+    if (prompt) checkByReply.set(prompt.message_id, entry);
     return;
   }
   if (data.startsWith('reject_')) {
