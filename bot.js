@@ -101,13 +101,27 @@ function normName(s) {
     .trim();
 }
 
-function qtyForOrder(p) {
+function qtyForOrder(p, lastQty) {
+  // Tugagan tovar uchun — oxirgi marta qancha zakas qilingan bo'lsa, shuni taklif qilamiz
+  if ((p.current_stock || 0) <= 0 && lastQty > 0) return lastQty;
   const TARGET_DAYS = 30;
   let raw = Math.max(0, TARGET_DAYS * (p.daily_usage || 0) - (p.current_stock || 0));
-  // Kunlik sarfi noma'lum, lekin tovar tugagan — kamida 1 birlik taklif qilamiz
-  if (raw <= 0 && (p.current_stock || 0) <= 0) raw = 1;
+  // Kunlik sarfi noma'lum, lekin tovar tugagan — oxirgi zakas yoki kamida 1 birlik
+  if (raw <= 0 && (p.current_stock || 0) <= 0) raw = lastQty > 0 ? lastQty : 1;
   const isWhole = /dona|quti|rulon|pachka|metr/i.test(p.unit || '');
   return isWhole ? Math.ceil(raw) : Math.ceil(raw * 10) / 10;
+}
+
+// Har bir mahsulot uchun oxirgi zakas (sotib olish) miqdorini topish
+async function getLastOrderQtyMap() {
+  const rows = await db.all2(`
+    SELECT pu.product_id AS pid, pu.quantity AS qty
+    FROM purchases pu
+    JOIN (SELECT product_id, MAX(id) AS mid FROM purchases GROUP BY product_id) last
+      ON pu.id = last.mid`);
+  const m = new Map();
+  for (const r of rows) m.set(r.pid, r.qty);
+  return m;
 }
 
 // ── Inline keyboard ────────────────────────────────────────────────────────
@@ -164,16 +178,16 @@ async function notifyLowStock(forceCheck = false) {
     if (forceCheck) await sendMessage(ADMIN_CHAT_ID, '✅ Barcha tovarlar yetarli! Buyurtma kerak emas.');
     return;
   }
-  const items = buildGroupedItems(prods);
+  const items = buildGroupedItems(prods, await getLastOrderQtyMap());
   const msg = await sendMessage(ADMIN_CHAT_ID, buildApprovalText(items), { reply_markup: buildApprovalKeyboard(items) });
   if (msg) approvalSessions.set(msg.message_id, { items, chat_id: ADMIN_CHAT_ID });
   console.log(`[bot] Admin ga ${items.length} ta guruh (${prods.length} ta tovar) ro'yxati yuborildi`);
 }
 
 // Bir xil nomli mahsulotlarni (sintaksisi boshqacha) bitta guruhga jamlash
-function buildGroupedItems(prods) {
+function buildGroupedItems(prods, lastQtyMap = new Map()) {
   const raw = prods.map(p => ({
-    product_id: p.id, name: p.name, unit: p.unit || '', qty: qtyForOrder(p),
+    product_id: p.id, name: p.name, unit: p.unit || '', qty: qtyForOrder(p, lastQtyMap.get(p.id)),
     stock: p.current_stock || 0,
     days_left: (p.current_stock || 0) <= 0 ? 0 : (p.daily_usage > 0 ? p.current_stock / p.daily_usage : Infinity),
     supplier_id: p.supplier_id || null, supplier_name: p.supplier_name || null,
@@ -224,7 +238,7 @@ async function autoCheckUrgent() {
     const inSession = _productsInOpenSessions();
     const fresh = urgent.filter(p => !inSession.has(p.id));
     if (!fresh.length) return;
-    const items = buildGroupedItems(fresh);
+    const items = buildGroupedItems(fresh, await getLastOrderQtyMap());
     const msg = await sendMessage(ADMIN_CHAT_ID,
       `🔔 <b>Avtomatik ogohlantirish</b> — shoshilinch / tugagan tovarlar:\n\n` +
       buildApprovalText(items).replace(/^📋 <b>.*<\/b>\n\n/, ''),
@@ -310,9 +324,10 @@ async function askNextQty(chatId) {
     return;
   }
   const it = flow.items[flow.idx];
+  const hint = (it.stock || 0) <= 0 ? ' <i>(oxirgi zakas miqdori)</i>' : '';
   await sendMessage(chatId,
     `📝 <b>${it.name}</b> — qancha zakas qilamiz?\n` +
-    `Qoldiq: ${it.stock} ${it.unit} | Taklif: <b>${it.qty} ${it.unit}</b>\n\n` +
+    `Qoldiq: ${it.stock} ${it.unit} | Taklif: <b>${it.qty} ${it.unit}</b>${hint}\n\n` +
     `Sonni yuboring yoki taklifni qabul qilish uchun <b>ok</b> deb yozing:`);
 }
 
