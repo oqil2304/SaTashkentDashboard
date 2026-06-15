@@ -7,7 +7,7 @@ const path         = require('path');
 const fs           = require('fs');
 const multer       = require('multer');
 const { db, init, saveDb } = require('./db');
-const { startBot, notifyLowStock } = require('./bot');
+const { startBot, notifyLowStock, completeOrder } = require('./bot');
 
 // Avatar upload konfiguratsiyasi
 const avatarStorage = multer.diskStorage({
@@ -549,11 +549,8 @@ app.post('/api/bot/check-stock', auth, adminOnly, async (req, res) => {
 // Finance saytdan webhook
 app.post('/api/bot/finance-webhook', async (req, res) => {
   try {
-    const { order_id, status, payment_ref } = req.body;
-    if (status === 'paid') {
-      const { completeOrder } = require('./bot');
-      if (typeof completeOrder === 'function') await completeOrder(order_id);
-    }
+    const { order_id, status } = req.body;
+    if (status === 'paid' && typeof completeOrder === 'function') await completeOrder(order_id);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
