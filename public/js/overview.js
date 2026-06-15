@@ -3,12 +3,12 @@ console.log('[overview.js] yuklandi');
 
 let overviewFilter = 'all'; // qaysi karta tanlangan: all | urgent | low7 | spend
 
-// Tugagan mahsulotlar (ombor butunlay tugagan — 0 yoki undan kam kun)
+// Tugagan mahsulotlar: ombor 0 yoki undan kam (sarfi noma'lum bo'lsa ham)
 function finishedProducts() {
-  return products.filter(p => p.daily_usage > 0 && daysLeft(p.current_stock, p.daily_usage) <= 0);
+  return products.filter(p => (p.current_stock || 0) <= 0);
 }
 
-// Shoshilinch mahsulotlar (hali tugamagan, lekin ≤2 kun qolgan)
+// Shoshilinch mahsulotlar (≤2 kun qolgan — sarfi ma'lum bo'lsa)
 function urgentProducts() {
   return products.filter(p => {
     const d = daysLeft(p.current_stock, p.daily_usage);
@@ -16,7 +16,7 @@ function urgentProducts() {
   });
 }
 
-// Kam qolgan mahsulotlar (hali tugamagan, ≤7 kun)
+// Kam qolgan mahsulotlar (≤7 kun — sarfi ma'lum bo'lsa)
 function lowStockProducts() {
   return products.filter(p => {
     const d = daysLeft(p.current_stock, p.daily_usage);
@@ -24,9 +24,11 @@ function lowStockProducts() {
   });
 }
 
-// Qo'ng'iroq belgisi va reminder — faqat tugagan mahsulotlar
+// Qo'ng'iroq belgisi — tugagan + shoshilinch
 function alertProducts() {
-  return finishedProducts();
+  const finished = finishedProducts();
+  const urgent   = urgentProducts().filter(p => !finished.find(f => f.id === p.id));
+  return [...finished, ...urgent];
 }
 
 let _lastAlertCount = null; // oldingi ogohlantirishlar soni (ovoz uchun)

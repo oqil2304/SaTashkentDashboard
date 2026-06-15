@@ -17,7 +17,8 @@ function today() {
 }
 
 function daysLeft(stock, du) {
-  if (!du || du <= 0) return Infinity;
+  if ((stock || 0) <= 0) return 0;    // ombor tugagan — 0 kun
+  if (!du || du <= 0) return Infinity; // sarfi noma'lum — ∞
   return stock / du;
 }
 
@@ -26,8 +27,9 @@ function brName(id) {
 }
 
 function daysColor(days) {
+  if (days <= 0)                    return 'var(--red)';
   if (!isFinite(days) || days > 7) return 'var(--teal)';
-  if (days <= 2) return 'var(--red)';
+  if (days <= 2)                    return 'var(--red)';
   return 'var(--amber)';
 }
 
