@@ -861,11 +861,18 @@ async function handleCallback(query) {
   }
   if (data.startsWith('reject_')) {
     const orderId = parseInt(data.replace('reject_', ''));
+    const rejOrder = await db.get2("SELECT * FROM supply_orders WHERE id=?", [orderId]);
     await db.run2("UPDATE supply_orders SET status='cancelled', updated_at=datetime('now') WHERE id=?", [orderId]);
     saveDb();
     await answerCallbackQuery(query.id, { text: '❌ Rad etildi' });
     await editMessageReplyMarkup(chatId, msgId, { inline_keyboard: [] });
     await sendMessage(chatId, '❌ Buyurtma rad etildi.');
+    // Ta'minotchiga ham xabar beramiz
+    if (rejOrder && rejOrder.supplier_chat_id) {
+      await sendMessage(rejOrder.supplier_chat_id,
+        `❌ <b>${rejOrder.product_name}</b> (${rejOrder.qty} ${rejOrder.unit}) uchun to'lov rad etildi.\n` +
+        `Savollar bo'lsa operator bilan bog'laning: ${COMPANY_INFO.phone}`);
+    }
     return;
   }
 
