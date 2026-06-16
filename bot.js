@@ -20,6 +20,16 @@ const COMPANY_INFO = {
 };
 const aiHistory = new Map(); // chat_id → [{role, content}, ...] (oxirgi suhbatlar)
 
+// SQLite datetime('now') UTC qaytaradi — Toshkent vaqtiga o'tkazib, o'qiladigan formatga keltiramiz
+function fmtTashkentTime(sqliteUtc) {
+  if (!sqliteUtc) return '';
+  const d = new Date(sqliteUtc.replace(' ', 'T') + 'Z');
+  if (isNaN(d.getTime())) return '';
+  d.setHours(d.getHours() + 5); // Toshkent = UTC+5
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 // ── Telegram API chaqiruvi ─────────────────────────────────────────────────
 async function tg(method, params = {}) {
   if (!API) return null;
@@ -869,8 +879,10 @@ async function handleCallback(query) {
     await sendMessage(chatId, '❌ Buyurtma rad etildi.');
     // Ta'minotchiga ham xabar beramiz
     if (rejOrder && rejOrder.supplier_chat_id) {
+      const invoiceTime = fmtTashkentTime(rejOrder.updated_at);
       await sendMessage(rejOrder.supplier_chat_id,
         `❌ <b>${rejOrder.product_name}</b> (${rejOrder.qty} ${rejOrder.unit}) uchun to'lov rad etildi.\n` +
+        (invoiceTime ? `Siz ${invoiceTime} da yuborgan schet-faktura bo'yicha.\n` : '') +
         `Savollar bo'lsa operator bilan bog'laning: ${COMPANY_INFO.phone}`);
     }
     return;
