@@ -393,18 +393,9 @@ async function _askForCheck(chatId, entry) {
   if (prompt) checkByReply.set(prompt.message_id, checkEntry);
 }
 
-// ── AI yordamchi: ta'minotchi savollariga javob berish ──────────────────────
-async function aiReply(sup, chatId, text, queue) {
+// ── Ta'minotchi konteksti: aktiv zakazlar + tegishli filiallar ──────────────
+async function buildSupplierContext(sup, chatId, queue) {
   const key = String(chatId);
-  if (!ANTHROPIC_API_KEY) {
-    await sendMessage(chatId,
-      `Savolingiz qabul qilindi 🙏 Tez orada operator javob beradi.\n` +
-      `Shoshilinch bo'lsa: ${COMPANY_INFO.phone}`);
-    return;
-  }
-  tg('sendChatAction', { chat_id: chatId, action: 'typing' });
-
-  // Ta'minotchining aktiv zakazlari — kontekst uchun (filial nomi bilan)
   let orders = [];
   try {
     orders = await db.all2(
@@ -446,6 +437,80 @@ async function aiReply(sup, chatId, text, queue) {
         `- ${b.name}: manzil: ${b.address || 'kiritilmagan'}; telefon: ${b.phone || COMPANY_INFO.phone}${b.manager ? `; mas'ul: ${b.manager}` : ''}`
       ).join('\n')
     : `- ${COMPANY_INFO.name}: manzil: ${COMPANY_INFO.address}; telefon: ${COMPANY_INFO.phone}`;
+
+  return { orders, orderLines, waiting, branchMap, branchInfoText };
+}
+
+// ── AIsiz oddiy javob (kalit so'zlar bo'yicha) — API kerak emas, bepul ───────
+function ruleBasedReply(ctx, text) {
+  const t = (text || '').toLowerCase();
+  const has = (...arr) => arr.some(w => t.includes(w));
+  const branches = [...ctx.branchMap.values()];
+
+  // Lokatsiya / manzil
+  if (has('lokatsiya', 'lokatsia', 'manzil', 'qayer', 'qaerda', 'qayerda', 'address', 'адрес', 'локац', 'где')) {
+    if (!branches.length) return `Manzil: ${COMPANY_INFO.address}\nTelefon: ${COMPANY_INFO.phone}`;
+    if (branches.length === 1) {
+      const b = branches[0];
+      return `📍 ${b.name} filiali\nManzil: ${b.address || 'kiritilmagan'}\nTelefon: ${b.phone || COMPANY_INFO.phone}${b.manager ? `\nMas'ul: ${b.manager}` : ''}`;
+    }
+    return `Buyurtmangiz quyidagi filiallarga tegishli:\n` +
+      branches.map(b => `📍 ${b.name}\n   Manzil: ${b.address || 'kiritilmagan'}\n   Telefon: ${b.phone || COMPANY_INFO.phone}`).join('\n');
+  }
+
+  // Telefon
+  if (has('telefon', 'nomer', 'nomeri', 'raqam', 'tel ', 'тел', 'номер', 'phone')) {
+    if (!branches.length) return `Telefon: ${COMPANY_INFO.phone}`;
+    if (branches.length === 1) {
+      const b = branches[0];
+      return `📞 ${b.name} filiali telefoni: ${b.phone || COMPANY_INFO.phone}`;
+    }
+    return branches.map(b => `📞 ${b.name}: ${b.phone || COMPANY_INFO.phone}`).join('\n');
+  }
+
+  // Chek / to'lov
+  if (has('chek', 'to\'lov', 'tolov', 'pul', 'oplata', 'чек', 'оплат', 'деньг', 'payment')) {
+    return `To'lov amalga oshirilgandan so'ng, to'lov cheki shu botda avtomatik sizga yuboriladi. ✅`;
+  }
+
+  // Faktura / schet
+  if (has('faktura', 'schet', 'счет', 'счёт', 'invoice', 'фактура')) {
+    return `Schet-fakturani shu chatga rasm yoki PDF ko'rinishida yuboring. Agar bir nechta zakaz bo'lsa, tegishli zakaz xabariga "reply" qilib yuboring. 📄`;
+  }
+
+  // Zakaz holati
+  if (has('zakaz', 'buyurtma', 'holat', 'status', 'заказ', 'статус')) {
+    return ctx.orders.length
+      ? `Sizning aktiv zakazlaringiz:\n${ctx.orderLines}`
+      : `Hozircha aktiv zakazingiz yo'q.`;
+  }
+
+  // Ish vaqti
+  if (has('ish vaqt', 'soat', 'qachon', 'vaqt', 'часы', 'время', 'работа')) {
+    return `Ish vaqti: ${COMPANY_INFO.hours}`;
+  }
+
+  // Salom
+  if (has('salom', 'assalom', 'привет', 'здравств', 'salam', 'hello', 'hi ')) {
+    return `Assalomu alaykum! 👋 Sizga qanday yordam bera olaman? Lokatsiya, telefon yoki zakaz holati haqida so'rashingiz mumkin.`;
+  }
+
+  // Tushunilmadi
+  return `Savolingiz qabul qilindi 🙏 Quyidagilar haqida so'rashingiz mumkin: lokatsiya/manzil, telefon, zakaz holati, faktura yoki to'lov.\nShoshilinch bo'lsa: ${branches[0]?.phone || COMPANY_INFO.phone}`;
+}
+
+// ── AI yordamchi: ta'minotchi savollariga javob berish ──────────────────────
+async function aiReply(sup, chatId, text, queue) {
+  const key = String(chatId);
+  const ctx = await buildSupplierContext(sup, chatId, queue);
+  const { orderLines, waiting, branchInfoText } = ctx;
+
+  // API kaliti yo'q — bepul kalit-so'zli javob
+  if (!ANTHROPIC_API_KEY) {
+    await sendMessage(chatId, ruleBasedReply(ctx, text), { parse_mode: undefined });
+    return;
+  }
+  tg('sendChatAction', { chat_id: chatId, action: 'typing' });
 
   const system =
 `Sen "${COMPANY_INFO.name}" kompaniyasining Telegram yordamchisisan. Ta'minotchilar (yetkazib beruvchilar) bilan muloyim, qisqa va aniq muloqot qilasan. Foydalanuvchi qaysi tilda yozsa (o'zbek yoki rus), shu tilda javob ber.
@@ -494,7 +559,8 @@ Qoidalar:
     const next = [...messages, { role: 'assistant', content: out }].slice(-8);
     aiHistory.set(key, next);
   } catch (e) {
-    await sendMessage(chatId, `Kechirasiz, hozir javob berishda muammo bo'ldi. Telefon orqali bog'laning: ${COMPANY_INFO.phone}`);
+    // AI ishlamasa (masalan, kredit tugagan) — bepul kalit-so'zli javobga o'tamiz
+    await sendMessage(chatId, ruleBasedReply(ctx, text), { parse_mode: undefined });
   }
 }
 
