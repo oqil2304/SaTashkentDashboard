@@ -8,6 +8,18 @@ const FINANCE_API_URL = process.env.FINANCE_API_URL || '';
 const FINANCE_API_KEY = process.env.FINANCE_API_KEY || '';
 const API = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : null;
 
+// ── AI yordamchi (ta'minotchilar bilan muloqot) ─────────────────────────────
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+const AI_MODEL          = process.env.AI_MODEL || 'claude-opus-4-8';
+const COMPANY_INFO = {
+  name:         process.env.COMPANY_NAME    || "SaTashkent Ta'minot Bo'limi",
+  address:      process.env.COMPANY_ADDRESS || "Toshkent shahri (manzil kiritilmagan)",
+  phone:        process.env.COMPANY_PHONE   || "+998 (telefon kiritilmagan)",
+  hours:        process.env.COMPANY_HOURS   || "Dushanba–Shanba, 09:00–18:00",
+  location_url: process.env.COMPANY_LOCATION_URL || ''
+};
+const aiHistory = new Map(); // chat_id → [{role, content}, ...] (oxirgi suhbatlar)
+
 // ── Telegram API chaqiruvi ─────────────────────────────────────────────────
 async function tg(method, params = {}) {
   if (!API) return null;
@@ -381,6 +393,82 @@ async function _askForCheck(chatId, entry) {
   if (prompt) checkByReply.set(prompt.message_id, checkEntry);
 }
 
+// ── AI yordamchi: ta'minotchi savollariga javob berish ──────────────────────
+async function aiReply(sup, chatId, text, queue) {
+  const key = String(chatId);
+  if (!ANTHROPIC_API_KEY) {
+    await sendMessage(chatId,
+      `Savolingiz qabul qilindi 🙏 Tez orada operator javob beradi.\n` +
+      `Shoshilinch bo'lsa: ${COMPANY_INFO.phone}`);
+    return;
+  }
+  tg('sendChatAction', { chat_id: chatId, action: 'typing' });
+
+  // Ta'minotchining aktiv zakazlari — kontekst uchun
+  let orders = [];
+  try {
+    orders = await db.all2(
+      "SELECT product_name, qty, unit, status FROM supply_orders WHERE supplier_chat_id=? AND status NOT IN ('delivered','cancelled') ORDER BY created_at DESC LIMIT 10",
+      [key]);
+  } catch (_) {}
+  const orderLines = orders.length
+    ? orders.map(o => `- ${o.product_name}: ${o.qty} ${o.unit} (${ORDER_STATUS[o.status] || o.status})`).join('\n')
+    : "Hozircha aktiv zakaz yo'q.";
+  const waiting = queue && queue.length
+    ? `Ta'minotchidan ayni vaqtda quyidagi zakaz(lar) uchun schet-faktura kutilyapti: ${queue.map(q => q.product_name).join(', ')}.`
+    : "Ayni vaqtda kutilayotgan faktura yo'q.";
+
+  const system =
+`Sen "${COMPANY_INFO.name}" kompaniyasining Telegram yordamchisisan. Ta'minotchilar (yetkazib beruvchilar) bilan muloyim, qisqa va aniq muloqot qilasan. Foydalanuvchi qaysi tilda yozsa (o'zbek yoki rus), shu tilda javob ber.
+
+Kompaniya ma'lumotlari:
+- Nomi: ${COMPANY_INFO.name}
+- Manzil: ${COMPANY_INFO.address}
+- Telefon: ${COMPANY_INFO.phone}
+- Ish vaqti: ${COMPANY_INFO.hours}
+${COMPANY_INFO.location_url ? `- Lokatsiya havolasi: ${COMPANY_INFO.location_url}` : ''}
+
+Ta'minotchi: ${sup.name}${sup.phone ? ` (tel: ${sup.phone})` : ''}
+Uning aktiv zakazlari:
+${orderLines}
+${waiting}
+
+Qoidalar:
+- Lokatsiya yoki manzil so'rasa — manzilni va (mavjud bo'lsa) lokatsiya havolasini ber.
+- Telefon raqam so'rasa — kompaniya telefonini ber.
+- Chek yoki to'lov haqida so'rasa: to'lov amalga oshirilgach, chek shu botda avtomatik yuborilishini tushuntir.
+- Schet-faktura haqida so'rasa: fakturani shu chatga rasm yoki PDF ko'rinishida yuborishini ayt (kerak bo'lsa tegishli zakaz xabariga "reply" qilib).
+- Zakaz holati haqida so'rasa — yuqoridagi ro'yxatga tayanib javob ber.
+- O'zingda yo'q ma'lumotni o'ylab topma; bunday holda operator bilan bog'lanishni (kompaniya telefoni orqali) taklif qil.
+- Javoblar qisqa bo'lsin (1-4 jumla). Emoji o'rtacha ishlat. Markdown/HTML teglar ishlatma — oddiy matn.`;
+
+  // Suhbat tarixi (oxirgi 8 ta xabar)
+  const hist = aiHistory.get(key) || [];
+  const messages = [...hist, { role: 'user', content: text }];
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({ model: AI_MODEL, max_tokens: 600, system, messages })
+    });
+    const data = await res.json();
+    if (!res.ok) { console.error('[bot] AI xato:', data.error || data); throw new Error('ai'); }
+    const reply = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+    const out = reply || "Kechirasiz, javob berolmadim. Iltimos, operator bilan bog'laning.";
+    await sendMessage(chatId, out, { parse_mode: undefined });
+    // Tarixni yangilash (oxirgi 8 ta)
+    const next = [...messages, { role: 'assistant', content: out }].slice(-8);
+    aiHistory.set(key, next);
+  } catch (e) {
+    await sendMessage(chatId, `Kechirasiz, hozir javob berishda muammo bo'ldi. Telefon orqali bog'laning: ${COMPANY_INFO.phone}`);
+  }
+}
+
 // ── Update handlerlar ───────────────────────────────────────────────────────
 async function handleMessage(msg) {
   const chatId = String(msg.chat.id);
@@ -600,19 +688,31 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Ta'minotchidan faktura (admin emas + kutilayotgan zakaz bor)
+  // Ta'minotchini aniqlash (faqat ulangan ta'minotchilarga xizmat ko'rsatamiz)
+  const sup = await db.get2("SELECT * FROM suppliers WHERE telegram_chat_id=?", [chatId]);
+
+  // Fayl (faktura) keldimi?
+  let fileId = null, mimeType = 'image/jpeg';
+  if (msg.document) { fileId = msg.document.file_id; mimeType = msg.document.mime_type || 'application/pdf'; }
+  else if (msg.photo) { fileId = msg.photo[msg.photo.length - 1].file_id; mimeType = 'image/jpeg'; }
+
   const queue = _qGet(pendingInvoices, chatId);
-  if (!queue.length) return;
+
+  // Matnli savol (fayl emas) — AI yordamchi javob beradi
+  if (!fileId) {
+    if (sup && text) { await aiReply(sup, chatId, text, queue); }
+    return;
+  }
+
+  // Fayl keldi, lekin kutilayotgan zakaz yo'q
+  if (!queue.length) {
+    if (sup) await sendMessage(chatId, "Rahmat! Ayni paytda sizdan faktura kutilayotgan faol zakaz yo'q. Savolingiz bo'lsa, yozib qoldiring.");
+    return;
+  }
 
   // Qaysi zakaz uchun? reply qilingan bo'lsa — aniq, aks holda navbatdagi birinchisi (FIFO)
   const rid = msg.reply_to_message?.message_id;
   const pending = (rid && invoiceByReply.get(rid)) || queue[0];
-
-  let fileId = null, mimeType = 'image/jpeg';
-  if (msg.document) { fileId = msg.document.file_id; mimeType = msg.document.mime_type || 'application/pdf'; }
-  else if (msg.photo) { fileId = msg.photo[msg.photo.length - 1].file_id; mimeType = 'image/jpeg'; }
-  else if (text) { fileId = 'text:' + text; mimeType = 'text/plain'; }
-  if (!fileId) return;
 
   await db.run2("UPDATE supply_orders SET invoice_file_id=?, status='invoice_received', updated_at=datetime('now') WHERE id=?", [fileId, pending.order_id]);
   saveDb();
