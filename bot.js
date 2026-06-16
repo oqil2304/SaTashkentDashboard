@@ -400,7 +400,8 @@ async function buildSupplierContext(sup, chatId, queue) {
   try {
     orders = await db.all2(
       `SELECT so.product_name, so.qty, so.unit, so.status, b.id as branch_id, b.name as branch_name,
-              b.address as branch_address, b.phone as branch_phone, b.manager as branch_manager
+              b.address as branch_address, b.phone as branch_phone, b.manager as branch_manager,
+              b.location_url as branch_location_url
        FROM supply_orders so
        LEFT JOIN products p ON so.product_id = p.id
        LEFT JOIN branches b ON p.branch_id = b.id
@@ -419,7 +420,7 @@ async function buildSupplierContext(sup, chatId, queue) {
   const branchMap = new Map();
   for (const o of orders) {
     if (o.branch_id && !branchMap.has(o.branch_id)) {
-      branchMap.set(o.branch_id, { name: o.branch_name, address: o.branch_address, phone: o.branch_phone, manager: o.branch_manager });
+      branchMap.set(o.branch_id, { name: o.branch_name, address: o.branch_address, phone: o.branch_phone, manager: o.branch_manager, location_url: o.branch_location_url });
     }
   }
   // Agar aktiv zakazda filial topilmasa, ta'minotchiga bog'langan filiallarni ko'rsatamiz
@@ -427,14 +428,14 @@ async function buildSupplierContext(sup, chatId, queue) {
     const ids = String(sup.branch_ids).split(',').map(s => s.trim()).filter(Boolean);
     if (ids.length) {
       try {
-        const rows = await db.all2(`SELECT id, name, address, phone, manager FROM branches WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+        const rows = await db.all2(`SELECT id, name, address, phone, manager, location_url FROM branches WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
         for (const b of rows) branchMap.set(b.id, b);
       } catch (_) {}
     }
   }
   const branchInfoText = branchMap.size
     ? [...branchMap.values()].map(b =>
-        `- ${b.name}: manzil: ${b.address || 'kiritilmagan'}; telefon: ${b.phone || COMPANY_INFO.phone}${b.manager ? `; mas'ul: ${b.manager}` : ''}`
+        `- ${b.name}: manzil: ${b.address || 'kiritilmagan'}; telefon: ${b.phone || COMPANY_INFO.phone}${b.manager ? `; mas'ul: ${b.manager}` : ''}${b.location_url ? `; Yandex Maps lokatsiya: ${b.location_url}` : ''}`
       ).join('\n')
     : `- ${COMPANY_INFO.name}: manzil: ${COMPANY_INFO.address}; telefon: ${COMPANY_INFO.phone}`;
 
@@ -452,10 +453,10 @@ function ruleBasedReply(ctx, text) {
     if (!branches.length) return `Manzil: ${COMPANY_INFO.address}\nTelefon: ${COMPANY_INFO.phone}`;
     if (branches.length === 1) {
       const b = branches[0];
-      return `📍 ${b.name} filiali\nManzil: ${b.address || 'kiritilmagan'}\nTelefon: ${b.phone || COMPANY_INFO.phone}${b.manager ? `\nMas'ul: ${b.manager}` : ''}`;
+      return `📍 ${b.name} filiali\nManzil: ${b.address || 'kiritilmagan'}\nTelefon: ${b.phone || COMPANY_INFO.phone}${b.manager ? `\nMas'ul: ${b.manager}` : ''}${b.location_url ? `\n🗺 Yandex Maps lokatsiya: ${b.location_url}` : ''}`;
     }
     return `Buyurtmangiz quyidagi filiallarga tegishli:\n` +
-      branches.map(b => `📍 ${b.name}\n   Manzil: ${b.address || 'kiritilmagan'}\n   Telefon: ${b.phone || COMPANY_INFO.phone}`).join('\n');
+      branches.map(b => `📍 ${b.name}\n   Manzil: ${b.address || 'kiritilmagan'}\n   Telefon: ${b.phone || COMPANY_INFO.phone}${b.location_url ? `\n   🗺 ${b.location_url}` : ''}`).join('\n');
   }
 
   // Telefon
@@ -528,7 +529,7 @@ ${orderLines}
 ${waiting}
 
 Qoidalar:
-- Lokatsiya yoki manzil so'rasa — yuqoridagi "Tegishli filial(lar)" ro'yxatidan, ta'minotchining hozirgi zakazi tegishli bo'lgan filial(lar)ning manzilini ber. Agar bir nechta filial bo'lsa, har birini nomi bilan ajratib ko'rsat.
+- Lokatsiya yoki manzil so'rasa — yuqoridagi "Tegishli filial(lar)" ro'yxatidan, ta'minotchining hozirgi zakazi tegishli bo'lgan filial(lar)ning manzilini va (mavjud bo'lsa) Yandex Maps lokatsiya havolasini to'liq ber. Agar bir nechta filial bo'lsa, har birini nomi bilan ajratib ko'rsat. Yandex Maps havolasini hech qachon o'zgartirma yoki qisqartirma — to'liq nusxalab ber.
 - Telefon raqam so'rasa — tegishli filialning telefonini ber (agar filialda telefon kiritilmagan bo'lsa, kompaniya umumiy telefonini ber: ${COMPANY_INFO.phone}).
 - Chek yoki to'lov haqida so'rasa: to'lov amalga oshirilgach, chek shu botda avtomatik yuborilishini tushuntir.
 - Schet-faktura haqida so'rasa: fakturani shu chatga rasm yoki PDF ko'rinishida yuborishini ayt (kerak bo'lsa tegishli zakaz xabariga "reply" qilib).

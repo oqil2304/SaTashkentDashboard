@@ -270,17 +270,17 @@ app.get('/api/branches', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post('/api/branches', auth, adminOnly, async (req, res) => {
-  const { name, address, manager, phone } = req.body;
+  const { name, address, manager, phone, location_url } = req.body;
   if (!name) return res.status(400).json({ error: 'Nomi kerak' });
   try {
-    const r = await db.run2('INSERT INTO branches (name,address,manager,phone) VALUES (?,?,?,?)', [name, address||'', manager||'', phone||'']);
+    const r = await db.run2('INSERT INTO branches (name,address,manager,phone,location_url) VALUES (?,?,?,?,?)', [name, address||'', manager||'', phone||'', location_url||'']);
     res.status(201).json(await db.get2('SELECT * FROM branches WHERE id=?', [r.lastID]));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.put('/api/branches/:id', auth, adminOnly, async (req, res) => {
-  const { name, address, manager, phone } = req.body;
+  const { name, address, manager, phone, location_url } = req.body;
   try {
-    await db.run2('UPDATE branches SET name=?,address=?,manager=?,phone=? WHERE id=?', [name, address||'', manager||'', phone||'', req.params.id]);
+    await db.run2('UPDATE branches SET name=?,address=?,manager=?,phone=?,location_url=? WHERE id=?', [name, address||'', manager||'', phone||'', location_url||'', req.params.id]);
     res.json(await db.get2('SELECT * FROM branches WHERE id=?', [req.params.id]));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

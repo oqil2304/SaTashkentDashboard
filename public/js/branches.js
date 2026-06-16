@@ -158,6 +158,10 @@ function openAddBranch() {
         <div class="form-group"><label class="form-label">Telefon</label>
           <input class="form-control" id="bp" placeholder="+998 90 123 45 67"></div>
       </div>
+      <div class="form-group"><label class="form-label">Yandex Maps lokatsiya havolasi</label>
+        <input class="form-control" id="bl" placeholder="https://yandex.uz/maps/-/...">
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px">Yandex Maps'da nuqtani belgilab, "Поделиться" → havolani shu yerga joylang. Bot ta'minotchiga shu lokatsiyani yuboradi.</div>
+      </div>
       <div class="form-actions">
         <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
         <button class="btn btn-primary" onclick="saveBranch(null)"><i class="ti ti-check"></i>Saqlash</button>
@@ -185,6 +189,10 @@ function openEditBranch(id) {
         <div class="form-group"><label class="form-label">Telefon</label>
           <input class="form-control" id="bp" value="${esc(b.phone || '')}"></div>
       </div>
+      <div class="form-group"><label class="form-label">Yandex Maps lokatsiya havolasi</label>
+        <input class="form-control" id="bl" value="${esc(b.location_url || '')}" placeholder="https://yandex.uz/maps/-/...">
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px">Yandex Maps'da nuqtani belgilab, "Поделиться" → havolani shu yerga joylang. Bot ta'minotchiga shu lokatsiyani yuboradi.</div>
+      </div>
       <div class="form-actions">
         <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
         <button class="btn btn-primary" onclick="saveBranch(${id})"><i class="ti ti-check"></i>Saqlash</button>
@@ -197,9 +205,10 @@ async function saveBranch(id) {
   if (!name) { toast('Nomi kerak', 'error'); return; }
   const body = {
     name,
-    address: document.getElementById('ba').value,
-    manager: document.getElementById('bm').value,
-    phone:   document.getElementById('bp').value
+    address:      document.getElementById('ba').value,
+    manager:      document.getElementById('bm').value,
+    phone:        document.getElementById('bp').value,
+    location_url: document.getElementById('bl').value.trim()
   };
   try {
     if (id) await api('PUT', `/api/branches/${id}`, body);
