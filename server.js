@@ -556,7 +556,7 @@ app.get('/api/suppliers/:id/link', auth, adminOnly, async (req, res) => {
 
 // Qo'lda yaratilgan buyurtma — ta'minotchiga bot orqali xabar yuboradi
 app.post('/api/purchases/manual-order', auth, canWrite, async (req, res) => {
-  const { product_id, quantity, unit_price, supplier_id, note } = req.body;
+  const { product_id, quantity, unit_price, supplier_id, note, branch_id } = req.body;
   if (!product_id || !quantity || !supplier_id) return res.status(400).json({ error: 'Mahsulot, miqdor va ta\'minotchi kerak' });
   try {
     const prod = await db.get2('SELECT * FROM products WHERE id=?', [product_id]);
@@ -564,11 +564,12 @@ app.post('/api/purchases/manual-order', auth, canWrite, async (req, res) => {
     if (!prod) return res.status(404).json({ error: 'Mahsulot topilmadi' });
     if (!sup)  return res.status(404).json({ error: 'Ta\'minotchi topilmadi' });
     if (!sup.telegram_chat_id) return res.status(400).json({ error: 'Ta\'minotchi botga ulanmagan' });
+    const bId = branch_id || prod.branch_id || null;
     const r = await db.run2(
-      `INSERT INTO supply_orders (product_id, product_name, qty, unit, unit_price, supplier_id, supplier_name, supplier_chat_id, status, note, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+      `INSERT INTO supply_orders (product_id, product_name, qty, unit, unit_price, supplier_id, supplier_name, supplier_chat_id, status, note, branch_id, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
       [product_id, prod.name, quantity, prod.unit || '', unit_price || 0,
-       sup.id, sup.name, sup.telegram_chat_id, 'manual_pending', note || '']
+       sup.id, sup.name, sup.telegram_chat_id, 'manual_pending', note || '', bId]
     );
     saveDb();
     const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [r.lastID]);

@@ -307,6 +307,7 @@ async function savePurchase(id) {
         quantity,
         unit_price:  unitPrice,
         supplier_id: suppId,
+        branch_id:   brId || prod.branch_id || null,
         note:        document.getElementById('xn')?.value || ''
       });
       toast("Ta'minotchiga faktura so'rovi yuborildi ✅");

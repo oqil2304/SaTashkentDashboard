@@ -414,7 +414,7 @@ async function buildSupplierContext(sup, chatId, queue) {
               b.location_url as branch_location_url
        FROM supply_orders so
        LEFT JOIN products p ON so.product_id = p.id
-       LEFT JOIN branches b ON p.branch_id = b.id
+       LEFT JOIN branches b ON b.id = COALESCE(so.branch_id, p.branch_id)
        WHERE so.supplier_chat_id=? AND so.status NOT IN ('delivered','cancelled')
        ORDER BY so.created_at DESC LIMIT 10`,
       [key]);
