@@ -404,29 +404,58 @@ async function aiReply(sup, chatId, text, queue) {
   }
   tg('sendChatAction', { chat_id: chatId, action: 'typing' });
 
-  // Ta'minotchining aktiv zakazlari — kontekst uchun
+  // Ta'minotchining aktiv zakazlari — kontekst uchun (filial nomi bilan)
   let orders = [];
   try {
     orders = await db.all2(
-      "SELECT product_name, qty, unit, status FROM supply_orders WHERE supplier_chat_id=? AND status NOT IN ('delivered','cancelled') ORDER BY created_at DESC LIMIT 10",
+      `SELECT so.product_name, so.qty, so.unit, so.status, b.id as branch_id, b.name as branch_name,
+              b.address as branch_address, b.phone as branch_phone, b.manager as branch_manager
+       FROM supply_orders so
+       LEFT JOIN products p ON so.product_id = p.id
+       LEFT JOIN branches b ON p.branch_id = b.id
+       WHERE so.supplier_chat_id=? AND so.status NOT IN ('delivered','cancelled')
+       ORDER BY so.created_at DESC LIMIT 10`,
       [key]);
   } catch (_) {}
   const orderLines = orders.length
-    ? orders.map(o => `- ${o.product_name}: ${o.qty} ${o.unit} (${ORDER_STATUS[o.status] || o.status})`).join('\n')
+    ? orders.map(o => `- ${o.product_name}: ${o.qty} ${o.unit} (${ORDER_STATUS[o.status] || o.status})${o.branch_name ? ` — filial: ${o.branch_name}` : ''}`).join('\n')
     : "Hozircha aktiv zakaz yo'q.";
   const waiting = queue && queue.length
     ? `Ta'minotchidan ayni vaqtda quyidagi zakaz(lar) uchun schet-faktura kutilyapti: ${queue.map(q => q.product_name).join(', ')}.`
     : "Ayni vaqtda kutilayotgan faktura yo'q.";
 
+  // Aktiv zakazlar bog'liq bo'lgan filiallar (takrorlarsiz) — har birining o'z manzili/telefoni
+  const branchMap = new Map();
+  for (const o of orders) {
+    if (o.branch_id && !branchMap.has(o.branch_id)) {
+      branchMap.set(o.branch_id, { name: o.branch_name, address: o.branch_address, phone: o.branch_phone, manager: o.branch_manager });
+    }
+  }
+  // Agar aktiv zakazda filial topilmasa, ta'minotchiga bog'langan filiallarni ko'rsatamiz
+  if (!branchMap.size && sup.branch_ids) {
+    const ids = String(sup.branch_ids).split(',').map(s => s.trim()).filter(Boolean);
+    if (ids.length) {
+      try {
+        const rows = await db.all2(`SELECT id, name, address, phone, manager FROM branches WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+        for (const b of rows) branchMap.set(b.id, b);
+      } catch (_) {}
+    }
+  }
+  const branchInfoText = branchMap.size
+    ? [...branchMap.values()].map(b =>
+        `- ${b.name}: manzil: ${b.address || 'kiritilmagan'}; telefon: ${b.phone || COMPANY_INFO.phone}${b.manager ? `; mas'ul: ${b.manager}` : ''}`
+      ).join('\n')
+    : `- ${COMPANY_INFO.name}: manzil: ${COMPANY_INFO.address}; telefon: ${COMPANY_INFO.phone}`;
+
   const system =
 `Sen "${COMPANY_INFO.name}" kompaniyasining Telegram yordamchisisan. Ta'minotchilar (yetkazib beruvchilar) bilan muloyim, qisqa va aniq muloqot qilasan. Foydalanuvchi qaysi tilda yozsa (o'zbek yoki rus), shu tilda javob ber.
 
-Kompaniya ma'lumotlari:
-- Nomi: ${COMPANY_INFO.name}
-- Manzil: ${COMPANY_INFO.address}
-- Telefon: ${COMPANY_INFO.phone}
-- Ish vaqti: ${COMPANY_INFO.hours}
-${COMPANY_INFO.location_url ? `- Lokatsiya havolasi: ${COMPANY_INFO.location_url}` : ''}
+Kompaniyaning bir nechta filiali bor, har birining manzili va telefoni boshqacha. Ta'minotchining buyurtmasi qaysi filialga tegishli bo'lsa, lokatsiya/manzil/telefon so'ralganda FAQAT shu filial(lar) ma'lumotini ber (pastdagi "Tegishli filial(lar)" ro'yxatidan):
+
+Tegishli filial(lar):
+${branchInfoText}
+
+Umumiy ish vaqti: ${COMPANY_INFO.hours}
 
 Ta'minotchi: ${sup.name}${sup.phone ? ` (tel: ${sup.phone})` : ''}
 Uning aktiv zakazlari:
@@ -434,8 +463,8 @@ ${orderLines}
 ${waiting}
 
 Qoidalar:
-- Lokatsiya yoki manzil so'rasa — manzilni va (mavjud bo'lsa) lokatsiya havolasini ber.
-- Telefon raqam so'rasa — kompaniya telefonini ber.
+- Lokatsiya yoki manzil so'rasa — yuqoridagi "Tegishli filial(lar)" ro'yxatidan, ta'minotchining hozirgi zakazi tegishli bo'lgan filial(lar)ning manzilini ber. Agar bir nechta filial bo'lsa, har birini nomi bilan ajratib ko'rsat.
+- Telefon raqam so'rasa — tegishli filialning telefonini ber (agar filialda telefon kiritilmagan bo'lsa, kompaniya umumiy telefonini ber: ${COMPANY_INFO.phone}).
 - Chek yoki to'lov haqida so'rasa: to'lov amalga oshirilgach, chek shu botda avtomatik yuborilishini tushuntir.
 - Schet-faktura haqida so'rasa: fakturani shu chatga rasm yoki PDF ko'rinishida yuborishini ayt (kerak bo'lsa tegishli zakaz xabariga "reply" qilib).
 - Zakaz holati haqida so'rasa — yuqoridagi ro'yxatga tayanib javob ber.
