@@ -349,7 +349,7 @@ app.get('/api/purchases', auth, async (req, res) => {
     // Jarayondagi buyurtmalarni ham qo'shamiz (manual yoki bot orqali)
     const pending = await db.all2(
       `SELECT so.id, so.product_id, so.product_name, so.qty AS quantity, so.unit,
-              so.unit_price, so.supplier_name AS supplier, so.status, so.note,
+              so.unit_price, so.supplier_name AS supplier, so.status, so.note, so.delivery_cost,
               so.created_at AS purchase_date, NULL AS branch_id, NULL AS branch_name,
               '_order' AS _type, so.supplier_id
        FROM supply_orders so
@@ -360,12 +360,12 @@ app.get('/api/purchases', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post('/api/purchases', auth, canWrite, async (req, res) => {
-  const { product_id, quantity, unit_price, purchase_date, supplier, note } = req.body;
+  const { product_id, quantity, unit_price, purchase_date, supplier, note, delivery_cost } = req.body;
   if (!product_id || !quantity) return res.status(400).json({ error: 'Mahsulot va miqdor kerak' });
   try {
     const r = await db.run2(
-      'INSERT INTO purchases (product_id,quantity,unit_price,purchase_date,supplier,note,remaining_qty) VALUES (?,?,?,?,?,?,?)',
-      [product_id, quantity, unit_price||0, purchase_date||new Date().toISOString().split('T')[0], supplier||'', note||'', quantity]
+      'INSERT INTO purchases (product_id,quantity,unit_price,purchase_date,supplier,note,remaining_qty,delivery_cost) VALUES (?,?,?,?,?,?,?,?)',
+      [product_id, quantity, unit_price||0, purchase_date||new Date().toISOString().split('T')[0], supplier||'', note||'', quantity, delivery_cost||0]
     );
     await db.run2('UPDATE products SET current_stock=current_stock+? WHERE id=?', [quantity, product_id]);
     res.status(201).json(await db.get2(
@@ -375,14 +375,14 @@ app.post('/api/purchases', auth, canWrite, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.put('/api/purchases/:id', auth, canWrite, async (req, res) => {
-  const { product_id, quantity, unit_price, purchase_date, supplier, note } = req.body;
+  const { product_id, quantity, unit_price, purchase_date, supplier, note, delivery_cost } = req.body;
   try {
     const old = await db.get2('SELECT * FROM purchases WHERE id=?', [req.params.id]);
     if (!old) return res.status(404).json({ error: 'Topilmadi' });
     await db.run2('UPDATE products SET current_stock=current_stock-? WHERE id=?', [old.quantity, old.product_id]);
     await db.run2('UPDATE products SET current_stock=current_stock+? WHERE id=?', [quantity, product_id]);
-    await db.run2('UPDATE purchases SET product_id=?,quantity=?,unit_price=?,purchase_date=?,supplier=?,note=? WHERE id=?',
-      [product_id, quantity, unit_price||0, purchase_date, supplier||'', note||'', req.params.id]);
+    await db.run2('UPDATE purchases SET product_id=?,quantity=?,unit_price=?,purchase_date=?,supplier=?,note=?,delivery_cost=? WHERE id=?',
+      [product_id, quantity, unit_price||0, purchase_date, supplier||'', note||'', delivery_cost||0, req.params.id]);
     res.json(await db.get2(
       'SELECT pu.*,pr.name as product_name,pr.unit,b.name as branch_name,b.id as branch_id FROM purchases pu LEFT JOIN products pr ON pu.product_id=pr.id LEFT JOIN branches b ON pr.branch_id=b.id WHERE pu.id=?',
       [req.params.id]
@@ -556,7 +556,7 @@ app.get('/api/suppliers/:id/link', auth, adminOnly, async (req, res) => {
 
 // Qo'lda yaratilgan buyurtma — ta'minotchiga bot orqali xabar yuboradi
 app.post('/api/purchases/manual-order', auth, canWrite, async (req, res) => {
-  const { product_id, quantity, unit_price, supplier_id, note, branch_id } = req.body;
+  const { product_id, quantity, unit_price, supplier_id, note, branch_id, delivery_cost } = req.body;
   if (!product_id || !quantity || !supplier_id) return res.status(400).json({ error: 'Mahsulot, miqdor va ta\'minotchi kerak' });
   try {
     const prod = await db.get2('SELECT * FROM products WHERE id=?', [product_id]);
@@ -566,10 +566,10 @@ app.post('/api/purchases/manual-order', auth, canWrite, async (req, res) => {
     if (!sup.telegram_chat_id) return res.status(400).json({ error: 'Ta\'minotchi botga ulanmagan' });
     const bId = branch_id || prod.branch_id || null;
     const r = await db.run2(
-      `INSERT INTO supply_orders (product_id, product_name, qty, unit, unit_price, supplier_id, supplier_name, supplier_chat_id, status, note, branch_id, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
+      `INSERT INTO supply_orders (product_id, product_name, qty, unit, unit_price, supplier_id, supplier_name, supplier_chat_id, status, note, branch_id, delivery_cost, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
       [product_id, prod.name, quantity, prod.unit || '', unit_price || 0,
-       sup.id, sup.name, sup.telegram_chat_id, 'manual_pending', note || '', bId]
+       sup.id, sup.name, sup.telegram_chat_id, 'manual_pending', note || '', bId, delivery_cost || 0]
     );
     saveDb();
     const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [r.lastID]);

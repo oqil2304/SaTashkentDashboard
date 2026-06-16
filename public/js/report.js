@@ -37,13 +37,13 @@ function applyReport() {
 
   const monthPurchases    = purchases.filter(p => (p.purchase_date || '').startsWith(ym));
   const monthConsumptions = consumptions.filter(co => (co.consume_date || '').startsWith(ym));
-  const totalSpend = monthPurchases.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
+  const totalSpend = monthPurchases.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0) + (p.delivery_cost || 0), 0);
   const totalCons  = monthConsumptions.length;
 
   // Sotib olishlar bo'yicha filial statistikasi
   const purchStats = branches.map(b => {
     const bPurch = monthPurchases.filter(p => p.branch_id == b.id);
-    const total  = bPurch.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
+    const total  = bPurch.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0) + (p.delivery_cost || 0), 0);
     return { ...b, purchase_count: bPurch.length, total_amount: total };
   }).sort((a, b) => b.total_amount - a.total_amount);
 
@@ -143,7 +143,7 @@ function openReportPurchDetail(branchId) {
   const bName  = branch ? branch.name : '—';
   const mLabel = `${UZ_MONTHS[month - 1]} ${year}`;
   const list   = purchases.filter(p => p.branch_id == branchId && (p.purchase_date || '').startsWith(ym));
-  const total  = list.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
+  const total  = list.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0) + (p.delivery_cost || 0), 0);
 
   const rows = list.length
     ? list.map(p => `<tr>
@@ -184,7 +184,7 @@ function exportReportExcel() {
 
   const monthPurchases    = purchases.filter(p => (p.purchase_date || '').startsWith(ym));
   const monthConsumptions = consumptions.filter(co => (co.consume_date || '').startsWith(ym));
-  const totalSpend = monthPurchases.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
+  const totalSpend = monthPurchases.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0) + (p.delivery_cost || 0), 0);
 
   // 1-varaq: Umumiy xulosa
   const summaryData = [
@@ -202,7 +202,7 @@ function exportReportExcel() {
     ['Filial', 'Sotib olishlar soni', 'Jami xarajat (so\'m)', 'Ulush (%)'],
     ...branches.map(b => {
       const bPurch = monthPurchases.filter(p => p.branch_id == b.id);
-      const amt = bPurch.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0), 0);
+      const amt = bPurch.reduce((s, p) => s + (p.quantity || 0) * (p.unit_price || 0) + (p.delivery_cost || 0), 0);
       const pct = totalSpend > 0 ? +(amt / totalSpend * 100).toFixed(1) : 0;
       return [b.name, bPurch.length, amt, pct];
     })

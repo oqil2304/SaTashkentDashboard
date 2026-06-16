@@ -78,6 +78,7 @@ const adminQtyFlow     = new Map();  // admin chat_id → { items, idx }
 const pendingChecks    = new Map();  // admin chat_id → [ {order_id, prompt_msg_id, ...}, ... ] (FIFO navbat)
 const checkByReply     = new Map();  // bot_prompt_msg_id → entry
 const pendingPrices    = new Map();  // admin chat_id → [ {order_id, prompt_msg_id, ...}, ... ] (narx so'rash)
+const pendingDelivery  = new Map();  // admin chat_id → [ {order_id, prompt_msg_id, ...}, ... ] (dostavka narxi so'rash)
 
 const adminOnly = (chatId) => String(chatId) === ADMIN_CHAT_ID;
 
@@ -321,12 +322,16 @@ async function completeOrder(orderId) {
   if (!members || !members.length)
     members = [{ product_id: order.product_id, name: order.product_name, qty: order.qty, unit: order.unit }];
 
+  let firstRow = true;
   for (const m of members) {
     if (!m.product_id || !(m.qty > 0)) continue;
+    // Dostavka narxi bitta zakazga tegishli — faqat birinchi qatorga yozamiz (takrorlanmasin)
+    const delivery = firstRow ? (order.delivery_cost || 0) : 0;
+    firstRow = false;
     await db.run2(
-      `INSERT INTO purchases (product_id, quantity, unit_price, purchase_date, supplier, note, remaining_qty, created_at)
-       VALUES (?, ?, ?, date('now'), ?, 'Telegram bot orqali zakaz', ?, datetime('now'))`,
-      [m.product_id, m.qty, order.unit_price || 0, order.supplier_name || '', m.qty]);
+      `INSERT INTO purchases (product_id, quantity, unit_price, purchase_date, supplier, note, remaining_qty, delivery_cost, created_at)
+       VALUES (?, ?, ?, date('now'), ?, 'Telegram bot orqali zakaz', ?, ?, datetime('now'))`,
+      [m.product_id, m.qty, order.unit_price || 0, order.supplier_name || '', m.qty, delivery]);
     await db.run2('UPDATE products SET current_stock = current_stock + ? WHERE id=?', [m.qty, m.product_id]);
   }
   await db.run2("UPDATE supply_orders SET status='delivered', updated_at=datetime('now') WHERE id=?", [orderId]);
@@ -383,6 +388,16 @@ async function finalizeOrders(chatId, items) {
     }
   }
   await sendMessage(chatId, `✅ ${items.length} ta pozitsiya tasdiqlandi.\n📨 ${sentCount} ta ta'minotchiga zakaz yuborildi.`);
+}
+
+// Dostavka narxi so'rash — narx kiritilgandan keyin, chekdan oldin chaqiriladi
+async function _askForDelivery(chatId, entry) {
+  const prompt = await sendMessage(chatId,
+    `🚚 <b>${entry.product_name}</b> — yetkazib berish (dostavka) bepulmi?\n` +
+    `Agar biz dostavka uchun to'lasak — summasini kiriting (so'm da).\n` +
+    `Bepul bo'lsa — <b>0</b> yoki <b>skip</b> deb yozing.`);
+  entry.prompt_msg_id = prompt?.message_id;
+  _qPush(pendingDelivery, chatId, entry);
 }
 
 // Chek so'rash — narx kiritilgandan keyin chaqiriladi
@@ -718,8 +733,8 @@ async function handleMessage(msg) {
 
       if (/^skip$/i.test((text || '').trim())) {
         _qRemove(pendingPrices, chatId, pe.order_id);
-        // Narxsiz chekka o'tish
-        await _askForCheck(chatId, pe);
+        // Narxsiz — dostavka so'rashga o'tamiz
+        await _askForDelivery(chatId, pe);
         return;
       }
       const price = parseFloat((text || '').replace(/\s/g,'').replace(',', '.'));
@@ -732,7 +747,27 @@ async function handleMessage(msg) {
       saveDb();
       const total = Math.round(pe.qty * price);
       await sendMessage(chatId, `✅ Narx saqlandi: <b>${price.toLocaleString()} so'm/${pe.unit}</b>\nJami: <b>${total.toLocaleString()} so'm</b>`);
-      await _askForCheck(chatId, pe);
+      await _askForDelivery(chatId, pe);
+      return;
+    }
+
+    // 2.5) Dostavka narxi so'rash oqimi (narxdan keyin, chekdan oldin)
+    const deliveries = _qGet(pendingDelivery, chatId);
+    if (deliveries.length) {
+      const de = deliveries[0];
+      const isSkip = /^(skip|0|yoq|yo'q|bepul)$/i.test((text || '').trim());
+      const delivery = isSkip ? 0 : parseFloat((text || '').replace(/\s/g,'').replace(',', '.'));
+      if (!isSkip && (isNaN(delivery) || delivery < 0)) {
+        await sendMessage(chatId, `🚚 Iltimos, to'g'ri summa kiriting (so'm da) yoki bepul bo'lsa <b>0</b>/<b>skip</b> deb yozing.`);
+        return;
+      }
+      _qRemove(pendingDelivery, chatId, de.order_id);
+      await db.run2('UPDATE supply_orders SET delivery_cost=? WHERE id=?', [delivery, de.order_id]);
+      saveDb();
+      await sendMessage(chatId, delivery
+        ? `✅ Dostavka narxi saqlandi: <b>${delivery.toLocaleString()} so'm</b>`
+        : `✅ Dostavka bepul deb belgilandi.`);
+      await _askForCheck(chatId, de);
       return;
     }
 

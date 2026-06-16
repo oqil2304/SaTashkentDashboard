@@ -20,7 +20,7 @@ function renderPurchases(c) {
     <div class="card"><div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Sana</th><th>Mahsulot</th><th>Filial</th><th>Miqdor</th><th>Birlik narx</th><th>Jami</th><th>Yetkazuvchi</th><th></th>
+          <th>Sana</th><th>Mahsulot</th><th>Filial</th><th>Miqdor</th><th>Birlik narx</th><th>Dostavka</th><th>Jami</th><th>Yetkazuvchi</th><th></th>
         </tr></thead>
         <tbody id="purchases-tbody"></tbody>
       </table>
@@ -43,7 +43,7 @@ function applyPurchaseFilter() {
   const tbody = document.getElementById('purchases-tbody');
   if (!tbody) return;
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="ti ti-shopping-cart-off"></i><p>Sotib olish topilmadi</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="ti ti-shopping-cart-off"></i><p>Sotib olish topilmadi</p></div></td></tr>`;
     const tot = document.getElementById('purchases-total');
     if (tot) tot.textContent = '';
     return;
@@ -54,11 +54,11 @@ function applyPurchaseFilter() {
     invoice_received: ['✅ Faktura keldi', '#166534', '#f0fdf4', '#bbf7d0'],
     approved:         ['✅ Tasdiqlangan', '#166534', '#f0fdf4', '#bbf7d0'],
   };
-  let total = 0;
+  let total = 0, totalDelivery = 0;
   tbody.innerHTML = list.map(p => {
     const isPending = !!p._type;
-    const sum = (p.quantity || 0) * (p.unit_price || 0);
-    if (!isPending) total += sum;
+    const sum = (p.quantity || 0) * (p.unit_price || 0) + (p.delivery_cost || 0);
+    if (!isPending) { total += sum; totalDelivery += (p.delivery_cost || 0); }
     const [slabel, sc, sbg, sbd] = STATUS_LABELS[p.status] || [];
     const statusBadge = isPending
       ? `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;background:${sbg};border:1px solid ${sbd};color:${sc}">${slabel}</span>`
@@ -70,6 +70,7 @@ function applyPurchaseFilter() {
       <td><span class="badge badge-gray">${esc(p.branch_name || '—')}</span></td>
       <td>${p.quantity} ${esc(p.unit || '')}</td>
       <td>${isPending ? '<span style="color:#94a3b8">—</span>' : fmtMoney(p.unit_price)}</td>
+      <td>${p.delivery_cost ? `<span style="color:#d97706;font-weight:600">${fmtMoney(p.delivery_cost)}</span>` : `<span style="color:#22c55e">Bepul</span>`}</td>
       <td style="font-weight:700;color:var(--teal)">${isPending ? '<span style="color:#94a3b8">—</span>' : fmtMoney(sum)}</td>
       <td style="color:#64748b">${esc(p.supplier || '—')}</td>
       <td style="white-space:nowrap;text-align:right">
@@ -82,7 +83,9 @@ function applyPurchaseFilter() {
     </tr>`;
   }).join('');
   const tot = document.getElementById('purchases-total');
-  if (tot) tot.innerHTML = `Jami: <strong style="color:var(--teal);font-size:15px">${fmtMoney(total)}</strong> (${list.length} ta yozuv)`;
+  if (tot) tot.innerHTML = `Jami: <strong style="color:var(--teal);font-size:15px">${fmtMoney(total)}</strong>` +
+    (totalDelivery ? ` (shu jumladan dostavka: <strong style="color:#d97706">${fmtMoney(totalDelivery)}</strong>)` : '') +
+    ` (${list.length} ta yozuv)`;
 }
 
 const PURCH_CATS = ['Oziq-ovqat', "Yoqilg'i", "Uy-ro'zg'or", 'Elektr', 'Ofis', 'Boshqa'];
@@ -235,6 +238,10 @@ function _purchModal(title, saveFn, opts = {}) {
           ${_supDropdown(opts.supplier_id)}
         </div>
       </div>
+      <div class="form-group"><label class="form-label">Dostavka narxi (soʻm)</label>
+        <input class="form-control" id="xdl" type="number" placeholder="0" value="${opts.delivery_cost || ''}">
+        <div style="font-size:11px;color:#94a3b8;margin-top:4px">Yetkazib berish bepul boʻlsa boʻsh qoldiring. Dostavka uchun biz toʻlasak — shu yerga summasini kiriting.</div>
+      </div>
       <div class="form-group"><label class="form-label">Izoh</label>
         <input class="form-control" id="xn" placeholder="Qoʻshimcha maʼlumot" value="${esc(opts.note || '')}"></div>
       <div id="xs-hint" style="font-size:12px;margin-bottom:8px"></div>
@@ -266,16 +273,18 @@ function openEditPurchase(id) {
     unit_price:   p.unit_price,
     purchase_date: p.purchase_date,
     supplier:     p.supplier || '',
-    note:         p.note || ''
+    note:         p.note || '',
+    delivery_cost: p.delivery_cost || ''
   });
 }
 
 async function savePurchase(id) {
-  const brId      = document.getElementById('xbr').value;
-  const pName     = document.getElementById('xp').value.trim();
-  const quantity  = parseFloat(document.getElementById('xq').value);
-  const suppId    = document.getElementById('xs')?.value || '';
-  const unitPrice = parseFloat(document.getElementById('xpr').value) || 0;
+  const brId        = document.getElementById('xbr').value;
+  const pName       = document.getElementById('xp').value.trim();
+  const quantity    = parseFloat(document.getElementById('xq').value);
+  const suppId      = document.getElementById('xs')?.value || '';
+  const unitPrice   = parseFloat(document.getElementById('xpr').value) || 0;
+  const deliveryCost = parseFloat(document.getElementById('xdl')?.value) || 0;
   if (!pName)                     { toast('Mahsulot nomini kiriting', 'error'); return; }
   if (!quantity || quantity <= 0) { toast('Miqdorni kiriting', 'error'); return; }
 
@@ -308,6 +317,7 @@ async function savePurchase(id) {
         unit_price:  unitPrice,
         supplier_id: suppId,
         branch_id:   brId || prod.branch_id || null,
+        delivery_cost: deliveryCost,
         note:        document.getElementById('xn')?.value || ''
       });
       toast("Ta'minotchiga faktura so'rovi yuborildi ✅");
@@ -326,6 +336,7 @@ async function savePurchase(id) {
     unit_price:    unitPrice,
     purchase_date: document.getElementById('xd')?.value || today(),
     supplier:      sup,
+    delivery_cost: deliveryCost,
     note:          document.getElementById('xn')?.value || ''
   };
   try {
