@@ -12,11 +12,25 @@ function _orderedProductIds() {
   return ids;
 }
 
-// Tugagan mahsulotlar: ombor 0 yoki undan kam (sarfi noma'lum bo'lsa ham)
-// Allaqachon buyurtma qilingan (jarayonda) mahsulotlar ko'rsatilmaydi
+// Rasxod (sarflanish) tarixi bor mahsulotlar — kamida bir marta ishlatilgan
+function _consumedProductIds() {
+  const ids = new Set();
+  (consumptions || []).forEach(co => {
+    if (co.product_id) ids.add(Number(co.product_id));
+  });
+  return ids;
+}
+
+// Tugagan mahsulotlar: ombor 0 yoki undan kam BO'LSA va u kamida bir marta
+// sarflangan (rasxod) bo'lsa. Yangi qo'shilgan, hali ishlatilmagan tovar "tugagan" hisoblanmaydi.
+// Allaqachon buyurtma qilingan (jarayonda) mahsulotlar ham ko'rsatilmaydi.
 function finishedProducts() {
-  const ordered = _orderedProductIds();
-  return products.filter(p => (p.current_stock || 0) <= 0 && !ordered.has(Number(p.id)));
+  const ordered  = _orderedProductIds();
+  const consumed = _consumedProductIds();
+  return products.filter(p =>
+    (p.current_stock || 0) <= 0 &&
+    consumed.has(Number(p.id)) &&
+    !ordered.has(Number(p.id)));
 }
 
 // Shoshilinch mahsulotlar (≤2 kun qolgan — sarfi ma'lum bo'lsa)

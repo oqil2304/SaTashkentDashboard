@@ -180,7 +180,7 @@ async function getLowStockProducts() {
     FROM products p
     LEFT JOIN suppliers s ON s.id = p.supplier_id
     WHERE (p.daily_usage > 0 AND (p.current_stock / p.daily_usage) <= 7)
-       OR (p.current_stock <= 0)
+       OR (p.current_stock <= 0 AND EXISTS (SELECT 1 FROM consumptions c WHERE c.product_id = p.id))
     ORDER BY CASE WHEN p.current_stock <= 0 THEN 0 ELSE 1 END,
              CASE WHEN p.daily_usage > 0 THEN p.current_stock / p.daily_usage ELSE 999999 END ASC`);
   const active = await db.all2(
