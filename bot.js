@@ -78,7 +78,6 @@ const adminQtyFlow     = new Map();  // admin chat_id → { items, idx }
 const pendingChecks    = new Map();  // admin chat_id → [ {order_id, prompt_msg_id, ...}, ... ] (FIFO navbat)
 const checkByReply     = new Map();  // bot_prompt_msg_id → entry
 const pendingPrices    = new Map();  // admin chat_id → [ {order_id, prompt_msg_id, ...}, ... ] (narx so'rash)
-const pendingDelivery  = new Map();  // admin chat_id → [ {order_id, prompt_msg_id, ...}, ... ] (dostavka narxi so'rash)
 
 const adminOnly = (chatId) => String(chatId) === ADMIN_CHAT_ID;
 
@@ -388,16 +387,6 @@ async function finalizeOrders(chatId, items) {
     }
   }
   await sendMessage(chatId, `✅ ${items.length} ta pozitsiya tasdiqlandi.\n📨 ${sentCount} ta ta'minotchiga zakaz yuborildi.`);
-}
-
-// Dostavka narxi so'rash — narx kiritilgandan keyin, chekdan oldin chaqiriladi
-async function _askForDelivery(chatId, entry) {
-  const prompt = await sendMessage(chatId,
-    `🚚 <b>${entry.product_name}</b> — yetkazib berish (dostavka) bepulmi?\n` +
-    `Agar biz dostavka uchun to'lasak — summasini kiriting (so'm da).\n` +
-    `Bepul bo'lsa — <b>0</b> yoki <b>skip</b> deb yozing.`);
-  entry.prompt_msg_id = prompt?.message_id;
-  _qPush(pendingDelivery, chatId, entry);
 }
 
 // Chek so'rash — narx kiritilgandan keyin chaqiriladi
@@ -733,8 +722,8 @@ async function handleMessage(msg) {
 
       if (/^skip$/i.test((text || '').trim())) {
         _qRemove(pendingPrices, chatId, pe.order_id);
-        // Narxsiz — dostavka so'rashga o'tamiz
-        await _askForDelivery(chatId, pe);
+        // Narxsiz chekka o'tish
+        await _askForCheck(chatId, pe);
         return;
       }
       const price = parseFloat((text || '').replace(/\s/g,'').replace(',', '.'));
@@ -747,27 +736,7 @@ async function handleMessage(msg) {
       saveDb();
       const total = Math.round(pe.qty * price);
       await sendMessage(chatId, `✅ Narx saqlandi: <b>${price.toLocaleString()} so'm/${pe.unit}</b>\nJami: <b>${total.toLocaleString()} so'm</b>`);
-      await _askForDelivery(chatId, pe);
-      return;
-    }
-
-    // 2.5) Dostavka narxi so'rash oqimi (narxdan keyin, chekdan oldin)
-    const deliveries = _qGet(pendingDelivery, chatId);
-    if (deliveries.length) {
-      const de = deliveries[0];
-      const isSkip = /^(skip|0|yoq|yo'q|bepul)$/i.test((text || '').trim());
-      const delivery = isSkip ? 0 : parseFloat((text || '').replace(/\s/g,'').replace(',', '.'));
-      if (!isSkip && (isNaN(delivery) || delivery < 0)) {
-        await sendMessage(chatId, `🚚 Iltimos, to'g'ri summa kiriting (so'm da) yoki bepul bo'lsa <b>0</b>/<b>skip</b> deb yozing.`);
-        return;
-      }
-      _qRemove(pendingDelivery, chatId, de.order_id);
-      await db.run2('UPDATE supply_orders SET delivery_cost=? WHERE id=?', [delivery, de.order_id]);
-      saveDb();
-      await sendMessage(chatId, delivery
-        ? `✅ Dostavka narxi saqlandi: <b>${delivery.toLocaleString()} so'm</b>`
-        : `✅ Dostavka bepul deb belgilandi.`);
-      await _askForCheck(chatId, de);
+      await _askForCheck(chatId, pe);
       return;
     }
 
@@ -895,6 +864,15 @@ async function handleCallback(query) {
       order_id: orderId, supplier_chat_id: order.supplier_chat_id,
       product_name: order.product_name, qty: order.qty, unit: order.unit
     };
+    // Narx dashboardda kiritilgan bo'lsa — qayta so'ramaymiz, to'g'ridan chekka o'tamiz
+    if (order.unit_price && order.unit_price > 0) {
+      const total = Math.round(order.qty * order.unit_price);
+      await sendMessage(chatId,
+        `💰 Narx allaqachon kiritilgan: <b>${order.unit_price.toLocaleString()} so'm/${order.unit}</b>\n` +
+        `Jami: <b>${total.toLocaleString()} so'm</b>`);
+      await _askForCheck(chatId, entry);
+      return;
+    }
     // Avval birlik narxini so'raymiz
     const pricePrompt = await sendMessage(chatId,
       `💰 <b>${order.product_name}</b> — birlik narxini kiriting (so'm da).\n` +

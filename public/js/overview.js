@@ -3,24 +3,37 @@ console.log('[overview.js] yuklandi');
 
 let overviewFilter = 'all'; // qaysi karta tanlangan: all | urgent | low7 | spend
 
+// Aktiv (jarayondagi) buyurtmasi bor mahsulotlar — bular qayta eslatilmaydi
+function _orderedProductIds() {
+  const ids = new Set();
+  (purchases || []).forEach(p => {
+    if (p._type && p.product_id) ids.add(Number(p.product_id));
+  });
+  return ids;
+}
+
 // Tugagan mahsulotlar: ombor 0 yoki undan kam (sarfi noma'lum bo'lsa ham)
+// Allaqachon buyurtma qilingan (jarayonda) mahsulotlar ko'rsatilmaydi
 function finishedProducts() {
-  return products.filter(p => (p.current_stock || 0) <= 0);
+  const ordered = _orderedProductIds();
+  return products.filter(p => (p.current_stock || 0) <= 0 && !ordered.has(Number(p.id)));
 }
 
 // Shoshilinch mahsulotlar (≤2 kun qolgan — sarfi ma'lum bo'lsa)
 function urgentProducts() {
+  const ordered = _orderedProductIds();
   return products.filter(p => {
     const d = daysLeft(p.current_stock, p.daily_usage);
-    return p.daily_usage > 0 && d > 0 && d <= 2;
+    return p.daily_usage > 0 && d > 0 && d <= 2 && !ordered.has(Number(p.id));
   });
 }
 
 // Kam qolgan mahsulotlar (≤7 kun — sarfi ma'lum bo'lsa)
 function lowStockProducts() {
+  const ordered = _orderedProductIds();
   return products.filter(p => {
     const d = daysLeft(p.current_stock, p.daily_usage);
-    return p.daily_usage > 0 && d > 0 && d <= 7;
+    return p.daily_usage > 0 && d > 0 && d <= 7 && !ordered.has(Number(p.id));
   });
 }
 
