@@ -88,6 +88,7 @@ async function init() {
   ensureColumn('supply_orders', 'branch_id', 'INTEGER');
   ensureColumn('purchases', 'delivery_cost', 'REAL DEFAULT 0');
   ensureColumn('supply_orders', 'delivery_cost', 'REAL DEFAULT 0');
+  ensureColumn('purchases', 'supplier_id', 'INTEGER');
   ensureColumn('users', 'email', 'TEXT');
   ensureColumn('users', 'phone', 'TEXT');
   ensureColumn('users', 'full_name', 'TEXT');

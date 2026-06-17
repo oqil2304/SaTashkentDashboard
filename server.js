@@ -333,8 +333,13 @@ app.delete('/api/products/:id', auth, adminOnly, async (req, res) => {
 
 // Purchases — haqiqiy xaridlar + jarayondagi buyurtmalar (supply_orders)
 app.get('/api/purchases', auth, async (req, res) => {
-  let sql = `SELECT pu.*,pr.name as product_name,pr.unit,b.name as branch_name,b.id as branch_id
-             FROM purchases pu LEFT JOIN products pr ON pu.product_id=pr.id LEFT JOIN branches b ON pr.branch_id=b.id WHERE 1=1`;
+  let sql = `SELECT pu.*,pr.name as product_name,pr.unit,b.name as branch_name,b.id as branch_id,
+             COALESCE(s.name, pu.supplier) as supplier
+             FROM purchases pu
+             LEFT JOIN products pr ON pu.product_id=pr.id
+             LEFT JOIN branches b ON pr.branch_id=b.id
+             LEFT JOIN suppliers s ON s.id=pu.supplier_id
+             WHERE 1=1`;
   const params = [];
   if (req.query.product_id) { sql += ' AND pu.product_id=?'; params.push(req.query.product_id); }
   if (req.query.branch_id)  { sql += ' AND b.id=?'; params.push(req.query.branch_id); }
@@ -360,31 +365,31 @@ app.get('/api/purchases', auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post('/api/purchases', auth, canWrite, async (req, res) => {
-  const { product_id, quantity, unit_price, purchase_date, supplier, note, delivery_cost } = req.body;
+  const { product_id, quantity, unit_price, purchase_date, supplier, note, delivery_cost, supplier_id } = req.body;
   if (!product_id || !quantity) return res.status(400).json({ error: 'Mahsulot va miqdor kerak' });
   try {
     const r = await db.run2(
-      'INSERT INTO purchases (product_id,quantity,unit_price,purchase_date,supplier,note,remaining_qty,delivery_cost) VALUES (?,?,?,?,?,?,?,?)',
-      [product_id, quantity, unit_price||0, purchase_date||new Date().toISOString().split('T')[0], supplier||'', note||'', quantity, delivery_cost||0]
+      'INSERT INTO purchases (product_id,quantity,unit_price,purchase_date,supplier,note,remaining_qty,delivery_cost,supplier_id) VALUES (?,?,?,?,?,?,?,?,?)',
+      [product_id, quantity, unit_price||0, purchase_date||new Date().toISOString().split('T')[0], supplier||'', note||'', quantity, delivery_cost||0, supplier_id||null]
     );
     await db.run2('UPDATE products SET current_stock=current_stock+? WHERE id=?', [quantity, product_id]);
     res.status(201).json(await db.get2(
-      'SELECT pu.*,pr.name as product_name,pr.unit,b.name as branch_name,b.id as branch_id FROM purchases pu LEFT JOIN products pr ON pu.product_id=pr.id LEFT JOIN branches b ON pr.branch_id=b.id WHERE pu.id=?',
+      'SELECT pu.*,pr.name as product_name,pr.unit,b.name as branch_name,b.id as branch_id,COALESCE(s.name,pu.supplier) as supplier FROM purchases pu LEFT JOIN products pr ON pu.product_id=pr.id LEFT JOIN branches b ON pr.branch_id=b.id LEFT JOIN suppliers s ON s.id=pu.supplier_id WHERE pu.id=?',
       [r.lastID]
     ));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.put('/api/purchases/:id', auth, canWrite, async (req, res) => {
-  const { product_id, quantity, unit_price, purchase_date, supplier, note, delivery_cost } = req.body;
+  const { product_id, quantity, unit_price, purchase_date, supplier, note, delivery_cost, supplier_id } = req.body;
   try {
     const old = await db.get2('SELECT * FROM purchases WHERE id=?', [req.params.id]);
     if (!old) return res.status(404).json({ error: 'Topilmadi' });
     await db.run2('UPDATE products SET current_stock=current_stock-? WHERE id=?', [old.quantity, old.product_id]);
     await db.run2('UPDATE products SET current_stock=current_stock+? WHERE id=?', [quantity, product_id]);
-    await db.run2('UPDATE purchases SET product_id=?,quantity=?,unit_price=?,purchase_date=?,supplier=?,note=?,delivery_cost=? WHERE id=?',
-      [product_id, quantity, unit_price||0, purchase_date, supplier||'', note||'', delivery_cost||0, req.params.id]);
+    await db.run2('UPDATE purchases SET product_id=?,quantity=?,unit_price=?,purchase_date=?,supplier=?,note=?,delivery_cost=?,supplier_id=? WHERE id=?',
+      [product_id, quantity, unit_price||0, purchase_date, supplier||'', note||'', delivery_cost||0, supplier_id||null, req.params.id]);
     res.json(await db.get2(
-      'SELECT pu.*,pr.name as product_name,pr.unit,b.name as branch_name,b.id as branch_id FROM purchases pu LEFT JOIN products pr ON pu.product_id=pr.id LEFT JOIN branches b ON pr.branch_id=b.id WHERE pu.id=?',
+      'SELECT pu.*,pr.name as product_name,pr.unit,b.name as branch_name,b.id as branch_id,COALESCE(s.name,pu.supplier) as supplier FROM purchases pu LEFT JOIN products pr ON pu.product_id=pr.id LEFT JOIN branches b ON pr.branch_id=b.id LEFT JOIN suppliers s ON s.id=pu.supplier_id WHERE pu.id=?',
       [req.params.id]
     ));
   } catch (e) { res.status(500).json({ error: e.message }); }

@@ -272,7 +272,7 @@ function openEditPurchase(id) {
     quantity:     p.quantity,
     unit_price:   p.unit_price,
     purchase_date: p.purchase_date,
-    supplier:     p.supplier || '',
+    supplier_id:  p.supplier_id || '',
     note:         p.note || '',
     delivery_cost: p.delivery_cost || ''
   });
@@ -329,13 +329,14 @@ async function savePurchase(id) {
   }
 
   // Oddiy — to'g'ridan-to'g'ri omborga
-  const sup = suppId ? (suppliers.find(s => s.id == suppId)?.name || '') : '';
+  const supObj = suppId ? suppliers.find(s => s.id == suppId) : null;
   const body = {
     product_id:    prod.id,
     quantity,
     unit_price:    unitPrice,
     purchase_date: document.getElementById('xd')?.value || today(),
-    supplier:      sup,
+    supplier:      supObj?.name || '',
+    supplier_id:   supObj?.id || null,
     delivery_cost: deliveryCost,
     note:          document.getElementById('xn')?.value || ''
   };

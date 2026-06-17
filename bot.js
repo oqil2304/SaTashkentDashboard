@@ -328,9 +328,9 @@ async function completeOrder(orderId) {
     const delivery = firstRow ? (order.delivery_cost || 0) : 0;
     firstRow = false;
     await db.run2(
-      `INSERT INTO purchases (product_id, quantity, unit_price, purchase_date, supplier, note, remaining_qty, delivery_cost, created_at)
-       VALUES (?, ?, ?, date('now'), ?, 'Telegram bot orqali zakaz', ?, ?, datetime('now'))`,
-      [m.product_id, m.qty, order.unit_price || 0, order.supplier_name || '', m.qty, delivery]);
+      `INSERT INTO purchases (product_id, quantity, unit_price, purchase_date, supplier, supplier_id, note, remaining_qty, delivery_cost, created_at)
+       VALUES (?, ?, ?, date('now'), ?, ?, 'Telegram bot orqali zakaz', ?, ?, datetime('now'))`,
+      [m.product_id, m.qty, order.unit_price || 0, order.supplier_name || '', order.supplier_id || null, m.qty, delivery]);
     await db.run2('UPDATE products SET current_stock = current_stock + ? WHERE id=?', [m.qty, m.product_id]);
   }
   await db.run2("UPDATE supply_orders SET status='delivered', updated_at=datetime('now') WHERE id=?", [orderId]);
