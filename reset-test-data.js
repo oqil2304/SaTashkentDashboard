@@ -7,46 +7,41 @@
 //
 const path = require('path');
 const fs = require('fs');
-const initSqlJs = require('sql.js');
+const { DatabaseSync } = require('node:sqlite');
 
 const DB_FILE = path.join(__dirname, 'data', 'dashboard.db');
 
-(async () => {
-  if (!fs.existsSync(DB_FILE)) {
-    console.log('❌ Baza topilmadi:', DB_FILE);
-    process.exit(1);
-  }
-  const SQL = await initSqlJs();
-  const db = new SQL.Database(fs.readFileSync(DB_FILE));
+if (!fs.existsSync(DB_FILE)) {
+  console.log('❌ Baza topilmadi:', DB_FILE);
+  process.exit(1);
+}
+const db = new DatabaseSync(DB_FILE);
+db.exec('PRAGMA journal_mode = WAL');
 
-  const count = (t) => {
-    try { const r = db.exec(`SELECT COUNT(*) FROM ${t}`); return r[0]?.values[0][0] ?? 0; }
-    catch { return 0; }
-  };
+const count = (t) => {
+  try { return db.prepare(`SELECT COUNT(*) AS c FROM ${t}`).get().c ?? 0; }
+  catch { return 0; }
+};
 
-  console.log('── O\'chirishdan oldin ──');
-  ['products', 'purchases', 'consumptions', 'supply_orders'].forEach(t =>
-    console.log(`  ${t}: ${count(t)} ta`));
+console.log('── O\'chirishdan oldin ──');
+['products', 'purchases', 'consumptions', 'supply_orders'].forEach(t =>
+  console.log(`  ${t}: ${count(t)} ta`));
 
-  // Mahsulotga bog'liq barcha ma'lumotlarni tozalash (jadval bo'lmasa o'tkazib yuboramiz)
-  const wipe = (t) => { try { db.run(`DELETE FROM ${t}`); } catch (e) { console.log(`  (${t} jadvali yo'q — o'tkazildi)`); } };
-  wipe('consumptions');
-  wipe('purchases');
-  wipe('supply_orders');
-  wipe('products');
-  // AUTOINCREMENT hisoblagichlarini nolga qaytarish (id qaytadan 1 dan boshlanadi)
-  try { db.run("DELETE FROM sqlite_sequence WHERE name IN ('products','purchases','consumptions','supply_orders')"); } catch {}
+const wipe = (t) => { try { db.prepare(`DELETE FROM ${t}`).run(); } catch (e) { console.log(`  (${t} jadvali yo'q — o'tkazildi)`); } };
+wipe('consumptions');
+wipe('purchases');
+wipe('supply_orders');
+wipe('products');
+// AUTOINCREMENT hisoblagichlarini nolga qaytarish (id qaytadan 1 dan boshlanadi)
+try { db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('products','purchases','consumptions','supply_orders')").run(); } catch {}
 
-  // Test mahsulotlari qayta qo'shilmasligi uchun seed bayrog'ini o'rnatamiz
-  try {
-    db.run("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
-    db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('demo_seeded','1')");
-  } catch (e) { console.log('  (bayroq o\'rnatishda xato:', e.message, ')'); }
+// Test mahsulotlari qayta qo'shilmasligi uchun seed bayrog'ini o'rnatamiz
+try {
+  db.exec("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
+  db.prepare("INSERT OR REPLACE INTO settings (key,value) VALUES ('demo_seeded','1')").run();
+} catch (e) { console.log('  (bayroq o\'rnatishda xato:', e.message, ')'); }
 
-  fs.writeFileSync(DB_FILE, Buffer.from(db.export()));
-
-  console.log('── O\'chirildi ✅ ──');
-  console.log('Saqlandi: foydalanuvchilar, filiallar, ta\'minotchilar, kategoriyalar.');
-  console.log('Endi serverni qayta ishga tushiring: node server.js');
-  db.close();
-})();
+console.log('── O\'chirildi ✅ ──');
+console.log('Saqlandi: foydalanuvchilar, filiallar, ta\'minotchilar, kategoriyalar.');
+console.log('Endi serverni qayta ishga tushiring: node server.js');
+db.close();

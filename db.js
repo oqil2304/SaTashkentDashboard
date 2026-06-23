@@ -1,4 +1,4 @@
-const initSqlJs = require('sql.js');
+const { DatabaseSync } = require('node:sqlite');
 const bcrypt    = require('bcryptjs');
 const path      = require('path');
 const fs        = require('fs');
@@ -9,49 +9,55 @@ if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 const DB_FILE = path.join(dataDir, 'dashboard.db');
 let sqlDb = null;
 
-function saveDb() {
-  fs.writeFileSync(DB_FILE, Buffer.from(sqlDb.export()));
+// node:sqlite — yozishlar darhol diskka tushadi (WAL), shu sababli saveDb() bo'sh.
+// Bu funksiya eski kod bilan moslik uchun saqlanadi (ko'p joyda chaqiriladi).
+function saveDb() { /* node:sqlite avtomatik saqlaydi (WAL) */ }
+
+// Parametrlarni node:sqlite qabul qiladigan ko'rinishga keltirish:
+// undefined → null, boolean → 0/1 (sql.js lenient edi, node:sqlite qat'iy)
+function _norm(params) {
+  return (params || []).map(v => {
+    if (v === undefined) return null;
+    if (typeof v === 'boolean') return v ? 1 : 0;
+    return v;
+  });
 }
 
 const db = {
   run2(sql, params = []) {
-    sqlDb.run(sql, params);
-    const id = sqlDb.exec('SELECT last_insert_rowid() as id')[0]?.values[0][0];
-    saveDb();
-    return Promise.resolve({ lastID: id });
+    const r = sqlDb.prepare(sql).run(..._norm(params));
+    const id = r.lastInsertRowid;
+    return Promise.resolve({ lastID: typeof id === 'bigint' ? Number(id) : id, changes: Number(r.changes) });
   },
   get2(sql, params = []) {
-    const res = sqlDb.exec(sql, params);
-    if (!res.length || !res[0].values.length) return Promise.resolve(null);
-    const cols = res[0].columns, vals = res[0].values[0], obj = {};
-    cols.forEach((c, i) => obj[c] = vals[i]);
-    return Promise.resolve(obj);
+    const row = sqlDb.prepare(sql).get(..._norm(params));
+    return Promise.resolve(row || null);
   },
   all2(sql, params = []) {
-    const res = sqlDb.exec(sql, params);
-    if (!res.length) return Promise.resolve([]);
-    const cols = res[0].columns;
-    return Promise.resolve(res[0].values.map(vals => {
-      const obj = {}; cols.forEach((c, i) => obj[c] = vals[i]); return obj;
-    }));
+    const rows = sqlDb.prepare(sql).all(..._norm(params));
+    return Promise.resolve(rows);
   }
 };
 
-async function init() {
-  const SQL = await initSqlJs();
-  sqlDb = fs.existsSync(DB_FILE)
-    ? new SQL.Database(fs.readFileSync(DB_FILE))
-    : new SQL.Database();
+// init() ichida to'g'ridan-to'g'ri (sync) ishlatish uchun yordamchilar
+function _run(sql, params = []) { sqlDb.prepare(sql).run(..._norm(params)); }
 
-  sqlDb.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT DEFAULT 'admin')`);
-  sqlDb.run(`CREATE TABLE IF NOT EXISTS branches (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, address TEXT, manager TEXT, phone TEXT)`);
-  sqlDb.run(`CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)`);
-  sqlDb.run(`CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, branch_id INTEGER, name TEXT NOT NULL, category TEXT, unit TEXT, daily_usage REAL DEFAULT 1, current_stock REAL DEFAULT 0, min_stock REAL DEFAULT 0, note TEXT)`);
-  sqlDb.run(`CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, unit_price REAL, purchase_date TEXT, supplier TEXT, note TEXT, created_at TEXT DEFAULT (datetime('now')))`);
-  sqlDb.run(`CREATE TABLE IF NOT EXISTS consumptions (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, from_branch_id INTEGER, to_branch_id INTEGER, consume_date TEXT, note TEXT, unit_price REAL DEFAULT 0, created_at TEXT DEFAULT (datetime('now')))`);
-  sqlDb.run(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
-  sqlDb.run(`CREATE TABLE IF NOT EXISTS catalog_items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, unit TEXT DEFAULT '')`);
-  sqlDb.run(`CREATE TABLE IF NOT EXISTS suppliers (
+async function init() {
+  sqlDb = new DatabaseSync(DB_FILE);
+  // Ko'p jarayonli xavfsizlik: WAL rejimi + writer kutish vaqti
+  sqlDb.exec('PRAGMA journal_mode = WAL');
+  sqlDb.exec('PRAGMA busy_timeout = 8000');
+  sqlDb.exec('PRAGMA foreign_keys = OFF');
+
+  _run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT DEFAULT 'admin')`);
+  _run(`CREATE TABLE IF NOT EXISTS branches (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, address TEXT, manager TEXT, phone TEXT)`);
+  _run(`CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)`);
+  _run(`CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, branch_id INTEGER, name TEXT NOT NULL, category TEXT, unit TEXT, daily_usage REAL DEFAULT 1, current_stock REAL DEFAULT 0, min_stock REAL DEFAULT 0, note TEXT)`);
+  _run(`CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, unit_price REAL, purchase_date TEXT, supplier TEXT, note TEXT, created_at TEXT DEFAULT (datetime('now')))`);
+  _run(`CREATE TABLE IF NOT EXISTS consumptions (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, from_branch_id INTEGER, to_branch_id INTEGER, consume_date TEXT, note TEXT, unit_price REAL DEFAULT 0, created_at TEXT DEFAULT (datetime('now')))`);
+  _run(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
+  _run(`CREATE TABLE IF NOT EXISTS catalog_items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, unit TEXT DEFAULT '')`);
+  _run(`CREATE TABLE IF NOT EXISTS suppliers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     telegram_chat_id TEXT,
@@ -61,7 +67,7 @@ async function init() {
     note TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`);
-  sqlDb.run(`CREATE TABLE IF NOT EXISTS supply_orders (
+  _run(`CREATE TABLE IF NOT EXISTS supply_orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER,
     product_name TEXT,
@@ -102,11 +108,11 @@ async function init() {
   ensureColumn('consumptions', 'unit_price', 'REAL DEFAULT 0');
   ensureColumn('purchases', 'remaining_qty', 'REAL');
   // Yangi ustun bo'sh bo'lsa — quantity bilan to'ldirish
-  sqlDb.run('UPDATE purchases SET remaining_qty = quantity WHERE remaining_qty IS NULL');
+  _run('UPDATE purchases SET remaining_qty = quantity WHERE remaining_qty IS NULL');
   saveDb();
   await fifoInitRemainingQty();
   // Eski adminlar 'active' boʻlib qolsin
-  sqlDb.run("UPDATE users SET status='active' WHERE status IS NULL OR status=''");
+  _run("UPDATE users SET status='active' WHERE status IS NULL OR status=''");
 
   // Filiallarning haqiqiy ma'lumotlari (faqat eski standart nomlar bo'lsa yangilanadi)
   for (const [oldName, name, addr, phone] of [
@@ -115,7 +121,7 @@ async function init() {
     ['Filial №2',  'Buxoro filiali',     "Buxoro, Mustaqillik ko'chasi, 19", '+998 78 555 65 75'],
     ['Filial №3',  'Andijon filiali',    "Andijon, Mashrab ko'chasi, 7",     '+998 78 555 65 75'],
   ]) {
-    sqlDb.run('UPDATE branches SET name=?, address=?, phone=? WHERE name=?', [name, addr, phone, oldName]);
+    _run('UPDATE branches SET name=?, address=?, phone=? WHERE name=?', [name, addr, phone, oldName]);
   }
   saveDb();
 
@@ -126,9 +132,8 @@ async function init() {
 
 // Ustun mavjud boʻlmasa qoʻshish (sql.js da ALTER TABLE ADD COLUMN)
 function ensureColumn(table, col, type) {
-  const info = sqlDb.exec(`PRAGMA table_info(${table})`);
-  const cols = info.length ? info[0].values.map(v => v[1]) : [];
-  if (!cols.includes(col)) sqlDb.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+  const cols = sqlDb.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
+  if (!cols.includes(col)) _run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
 }
 
 async function seedData() {
@@ -299,7 +304,7 @@ async function fifoInitRemainingQty() {
     for (const batch of batches) {
       const take = Math.min(batch.quantity, consumed);
       const rem  = +(batch.quantity - take).toFixed(4);
-      sqlDb.run('UPDATE purchases SET remaining_qty=? WHERE id=?', [rem, batch.id]);
+      _run('UPDATE purchases SET remaining_qty=? WHERE id=?', [rem, batch.id]);
       consumed -= take;
       if (consumed <= 0) break;
     }
