@@ -10,6 +10,7 @@ async function loadAll() {
     api('GET', '/api/categories'),
     api('GET', '/api/consumptions'),
     api('GET', '/api/suppliers').catch(() => []),
+    api('GET', '/api/catalog').catch(() => []),
   ]);
   branches     = results[0];
   products     = results[1];
@@ -17,6 +18,7 @@ async function loadAll() {
   categories   = results[3];
   consumptions = results[4];
   suppliers    = results[5];
+  if (typeof catalogItems !== 'undefined') catalogItems = results[6] || [];
   console.log('[main.js] loadAll tugadi — branches:', branches.length, 'products:', products.length);
   updateAlertBadge();
 }
@@ -34,6 +36,7 @@ function navigate(section) {
     branches:  'Filiallar',
     suppliers: 'Ta\'minotchilar',
     report:    'Hisobot',
+    catalog:   'Mahsulotlar',
     users:     'Foydalanuvchilar',
     profile:   'Shaxsiy kabinet'
   };
@@ -53,6 +56,7 @@ function renderSection(s) {
     case 'branches':  renderBranches(c);  break;
     case 'suppliers': renderSuppliers(c); break;
     case 'report':    renderReport(c);    break;
+    case 'catalog':   renderCatalog(c);   break;
     case 'users':     renderUsers(c);     break;
     case 'profile':   renderProfile(c);   break;
     default: c.innerHTML = `<div class="empty-state"><i class="ti ti-question-mark"></i><p>Boʻlim topilmadi</p></div>`;

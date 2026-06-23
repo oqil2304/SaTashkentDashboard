@@ -209,7 +209,12 @@ function _purchModal(title, saveFn, opts = {}) {
             placeholder="Mahsulot nomi (yozing yoki tanlang)"
             value="${esc(opts.product_name || '')}" autocomplete="off"
             oninput="_purchProductChange()">
-          <datalist id="xp-list"></datalist>
+          <datalist id="xp-list">${
+            (typeof catalogItems !== 'undefined' && catalogItems.length
+              ? catalogItems
+              : products
+            ).map(p => `<option value="${esc(p.name)}"></option>`).join('')
+          }</datalist>
           <div id="xp-hint" style="font-size:11px;margin-top:4px;display:none"></div>
         </div>
       </div>
@@ -241,10 +246,6 @@ function _purchModal(title, saveFn, opts = {}) {
         <div class="form-group"><label class="form-label">Yetkazib beruvchi</label>
           ${_supDropdown(opts.supplier_id)}
         </div>
-      </div>
-      <div class="form-group"><label class="form-label">Dostavka narxi (soʻm)</label>
-        <input class="form-control" id="xdl" type="number" placeholder="0" value="${opts.delivery_cost || ''}">
-        <div style="font-size:11px;color:#94a3b8;margin-top:4px">Yetkazib berish bepul boʻlsa boʻsh qoldiring. Dostavka uchun biz toʻlasak — shu yerga summasini kiriting.</div>
       </div>
       <div class="form-group"><label class="form-label">Izoh</label>
         <input class="form-control" id="xn" placeholder="Qoʻshimcha maʼlumot" value="${esc(opts.note || '')}"></div>
@@ -288,7 +289,7 @@ async function savePurchase(id) {
   const quantity    = parseFloat(document.getElementById('xq').value);
   const suppId      = document.getElementById('xs')?.value || '';
   const unitPrice   = parseFloat(document.getElementById('xpr').value) || 0;
-  const deliveryCost = parseFloat(document.getElementById('xdl')?.value) || 0;
+  const deliveryCost = 0;
   if (!pName)                     { toast('Mahsulot nomini kiriting', 'error'); return; }
   if (!quantity || quantity <= 0) { toast('Miqdorni kiriting', 'error'); return; }
 
@@ -366,9 +367,19 @@ async function cancelOrder(id) {
 
 async function arrivedOrder(id) {
   if (!confirm('Tovar omborga kelganligini tasdiqlaysizmi?')) return;
-  const res = await fetch(`/api/supply-orders/${id}/arrived`, { method: 'PUT', credentials: 'include' });
-  if (res.ok) { toast('Tovar omborga kiritildi!'); await loadAll(); renderSection(currentSection); }
-  else alert('Xatolik yuz berdi');
+  const dlv = prompt('Dostavka narxi (so\'m)?\n0 = bepul');
+  if (dlv === null) return; // cancelled
+  const deliveryCost = parseFloat(dlv) || 0;
+  try {
+    const res = await fetch(`/api/supply-orders/${id}/arrived`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delivery_cost: deliveryCost })
+    });
+    if (res.ok) { toast('Tovar omborga kiritildi!'); await loadAll(); renderSection(currentSection); }
+    else { const data = await res.json().catch(() => ({})); alert('Xatolik: ' + (data.error || res.status)); }
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function delPurchase(id) {

@@ -529,6 +529,37 @@ app.delete('/api/suppliers/:id', auth, adminOnly, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Katalog (mahsulotlar katalogi) API ───────────────────────────────────────
+app.get('/api/catalog', auth, async (req, res) => {
+  try { res.json(await db.all2('SELECT * FROM catalog_items ORDER BY name')); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/catalog', auth, canWrite, async (req, res) => {
+  const { name, unit } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'Nomi kerak' });
+  try {
+    const r = await db.run2('INSERT INTO catalog_items (name, unit) VALUES (?,?)', [name, unit || '']);
+    res.status(201).json(await db.get2('SELECT * FROM catalog_items WHERE id=?', [r.lastID]));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/catalog/:id', auth, canWrite, async (req, res) => {
+  const { name, unit } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'Nomi kerak' });
+  try {
+    await db.run2('UPDATE catalog_items SET name=?, unit=? WHERE id=?', [name, unit || '', req.params.id]);
+    res.json(await db.get2('SELECT * FROM catalog_items WHERE id=?', [req.params.id]));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/catalog/:id', auth, canWrite, async (req, res) => {
+  try {
+    await db.run2('DELETE FROM catalog_items WHERE id=?', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Ta'minotchi ulash yo'riqnomasi
 app.get('/api/suppliers/:id/link', auth, adminOnly, async (req, res) => {
   const botUsername = getBotUsername() || process.env.BOT_USERNAME || '';
@@ -588,10 +619,13 @@ app.put('/api/supply-orders/:id/arrived', auth, canWrite, async (req, res) => {
     if (!members || !members.length)
       members = [{ product_id: order.product_id, name: order.product_name, qty: order.qty, unit: order.unit }];
 
+    const bodyDeliveryCost = req.body && req.body.delivery_cost != null ? parseFloat(req.body.delivery_cost) || 0 : null;
+    const effectiveDeliveryCost = bodyDeliveryCost !== null ? bodyDeliveryCost : (order.delivery_cost || 0);
+
     let firstRow = true;
     for (const m of members) {
       if (!m.product_id || !(m.qty > 0)) continue;
-      const delivery = firstRow ? (order.delivery_cost || 0) : 0;
+      const delivery = firstRow ? effectiveDeliveryCost : 0;
       firstRow = false;
       await db.run2(
         `INSERT INTO purchases (product_id, quantity, unit_price, purchase_date, supplier, supplier_id, note, remaining_qty, delivery_cost, created_at)

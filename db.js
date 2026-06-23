@@ -50,6 +50,7 @@ async function init() {
   sqlDb.run(`CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, unit_price REAL, purchase_date TEXT, supplier TEXT, note TEXT, created_at TEXT DEFAULT (datetime('now')))`);
   sqlDb.run(`CREATE TABLE IF NOT EXISTS consumptions (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, quantity REAL, from_branch_id INTEGER, to_branch_id INTEGER, consume_date TEXT, note TEXT, unit_price REAL DEFAULT 0, created_at TEXT DEFAULT (datetime('now')))`);
   sqlDb.run(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS catalog_items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, unit TEXT DEFAULT '')`);
   sqlDb.run(`CREATE TABLE IF NOT EXISTS suppliers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
