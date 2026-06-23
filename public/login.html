@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-  <link rel="icon" href="/logo.png?v=28" type="image/png" />
+  <link rel="icon" href="/logo.png?v=29" type="image/png" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -115,7 +115,7 @@
   <div class="login-card">
     <div class="logo-wrap">
       <div class="logo-circle">
-        <img src="/logo.png?v=28" alt="SaTashkent Supply" />
+        <img src="/logo.png?v=29" alt="SaTashkent Supply" />
       </div>
       <div class="logo-title">SaTashkent Ta'minot</div>
       <div class="logo-subtitle">Bosh Boshqaruv Paneli</div>
@@ -123,7 +123,6 @@
 
     <div class="tabs">
       <button class="tab active" data-pane="login">Kirish</button>
-      <button class="tab" data-pane="register">Ro'yxatdan o'tish</button>
     </div>
 
     <div class="msg error" id="msg-error"><i class="ti ti-alert-circle"></i><span id="error-text"></span></div>
@@ -152,50 +151,6 @@
       <div class="link-row">
         <button class="link" id="to-forgot">Parolni unutdingizmi?</button>
       </div>
-    </div>
-
-    <!-- RO'YXATDAN O'TISH -->
-    <div class="pane" id="pane-register">
-      <form id="register-form">
-        <div class="form-group">
-          <label class="form-label" for="r-fullname">To'liq ism</label>
-          <div class="input-wrap">
-            <i class="ti ti-user input-icon"></i>
-            <input class="form-input" type="text" id="r-fullname" placeholder="Ism Familiya" />
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="r-username">Login</label>
-          <div class="input-wrap">
-            <i class="ti ti-user input-icon"></i>
-            <input class="form-input" type="text" id="r-username" placeholder="foydalanuvchi" autocomplete="username" required />
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="r-email">Gmail</label>
-          <div class="input-wrap">
-            <i class="ti ti-mail input-icon"></i>
-            <input class="form-input" type="email" id="r-email" placeholder="email@gmail.com" autocomplete="email" />
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="r-phone">Telefon raqam</label>
-          <div class="input-wrap">
-            <i class="ti ti-phone input-icon"></i>
-            <input class="form-input" type="tel" id="r-phone" placeholder="+998 90 123 45 67" />
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="r-password">Parol</label>
-          <div class="input-wrap">
-            <i class="ti ti-lock input-icon"></i>
-            <input class="form-input" type="password" id="r-password" placeholder="••••••••" autocomplete="new-password" required />
-            <button type="button" class="eye-btn" onclick="toggleEye('r-password',this)" tabindex="-1"><i class="ti ti-eye"></i></button>
-          </div>
-        </div>
-        <button class="btn" type="submit">Akkaunt yaratish</button>
-      </form>
-      <div class="hint">Gmail yoki telefon raqamdan kamida bittasi kerak.<br>Admin tasdiqlagach tizimga kirasiz.</div>
     </div>
 
     <!-- PAROLNI UNUTDIM -->
@@ -280,27 +235,6 @@
       if (ok) { window.location.href = '/dashboard'; return; }
       showErr(data.error || 'Kirish xatosi');
       btn.disabled = false; btn.textContent = 'Kirish';
-    });
-
-    // RO'YXATDAN O'TISH
-    $('register-form').addEventListener('submit', async (e) => {
-      e.preventDefault(); clearMsg();
-      const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Yaratilmoqda...';
-      const { ok, data } = await post('/api/auth/register', {
-        full_name: $('r-fullname').value.trim(),
-        username: $('r-username').value.trim(),
-        email: $('r-email').value.trim(),
-        phone: $('r-phone').value.trim(),
-        password: $('r-password').value
-      });
-      if (ok) {
-        e.target.reset();
-        switchPane('login');
-        showOk(data.message || 'Akkaunt yaratildi. Admin tasdiqlagach kira olasiz.');
-      } else {
-        showErr(data.error || 'Ro\'yxatdan o\'tish xatosi');
-      }
-      btn.disabled = false; btn.textContent = 'Akkaunt yaratish';
     });
 
     // PAROLNI UNUTDIM — kod olish

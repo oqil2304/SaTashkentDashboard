@@ -105,22 +105,25 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Roʻyxatdan oʻtish — status 'pending', rol 'user' (admin tasdiqlaydi)
-app.post('/api/auth/register', async (req, res) => {
-  const { username, password, email, phone, full_name } = req.body || {};
+// Ochiq ro'yxatdan o'tish o'chirilgan — faqat admin foydalanuvchi yaratadi
+app.post('/api/auth/register', (req, res) => {
+  res.status(403).json({ error: 'Ro\'yxatdan o\'tish yopiq. Foydalanuvchi yaratish uchun administratorga murojaat qiling.' });
+});
+
+// Admin — yangi foydalanuvchi yaratish
+app.post('/api/admin/users', auth, adminOnly, async (req, res) => {
+  const { username, password, full_name, email, phone, role, branch_id } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Login va parol kerak' });
-  if (!email && !phone) return res.status(400).json({ error: 'Gmail yoki telefon raqam kerak' });
-  if (String(password).length < 4) return res.status(400).json({ error: 'Parol kamida 4 belgidan iborat boʻlsin' });
+  if (String(password).length < 4) return res.status(400).json({ error: 'Parol kamida 4 ta belgidan iborat bo\'lsin' });
   try {
     const uname = String(username).trim();
-    const exists = await db.get2('SELECT id FROM users WHERE lower(username)=? OR (email IS NOT NULL AND email<>"" AND lower(email)=?)',
-      [uname.toLowerCase(), String(email||'').trim().toLowerCase()]);
-    if (exists) return res.status(409).json({ error: 'Bu login yoki email allaqachon mavjud' });
+    const exists = await db.get2('SELECT id FROM users WHERE lower(username)=?', [uname.toLowerCase()]);
+    if (exists) return res.status(409).json({ error: 'Bu login allaqachon mavjud' });
     await db.run2(
-      "INSERT INTO users (username,password_hash,role,status,email,phone,full_name,created_at) VALUES (?,?,'user','pending',?,?,?,datetime('now'))",
-      [uname, bcrypt.hashSync(password, 10), String(email||'').trim(), String(phone||'').trim(), String(full_name||'').trim()]
+      "INSERT INTO users (username,password_hash,role,status,full_name,email,phone,branch_id,created_at) VALUES (?,?,?,'active',?,?,?,?,datetime('now'))",
+      [uname, bcrypt.hashSync(password, 10), role || 'user', full_name || '', email || '', phone || '', branch_id || null]
     );
-    res.status(201).json({ success: true, message: 'Akkaunt yaratildi. Admin tasdiqlagach kira olasiz.' });
+    res.status(201).json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

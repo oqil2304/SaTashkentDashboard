@@ -30,6 +30,7 @@ async function renderUsers(c) {
       <div style="display:flex;gap:8px;align-items:center">
         <span class="badge badge-gray"><i class="ti ti-users"></i>Jami: ${users.length}</span>
         ${pending ? `<span class="badge badge-amber"><i class="ti ti-clock-hour-4"></i>${pending} ta tasdiq kutmoqda</span>` : ''}
+        <button class="btn btn-primary" onclick="openAddUser()"><i class="ti ti-user-plus"></i>Foydalanuvchi qo'shish</button>
       </div>
     </div>
     <div class="card">
@@ -170,6 +171,62 @@ async function delUser(id) {
   try {
     await api('DELETE', `/api/users/${id}`);
     toast("Oʻchirildi");
+    renderSection('users');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function openAddUser() {
+  const brOpts = `<option value="">— Filial belgilanmagan —</option>` +
+    branches.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('');
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">Yangi foydalanuvchi qo'shish</div>
+      <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">To'liq ism</label>
+          <input class="form-control" id="nu-fullname" placeholder="Ism Familiya"></div>
+        <div class="form-group"><label class="form-label">Login *</label>
+          <input class="form-control" id="nu-username" placeholder="foydalanuvchi" autocomplete="off"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Parol *</label>
+          <input class="form-control" id="nu-password" type="password" placeholder="Kamida 4 ta belgi" autocomplete="new-password"></div>
+        <div class="form-group"><label class="form-label">Rol</label>
+          <select class="form-control" id="nu-role">
+            <option value="user">Foydalanuvchi</option>
+            <option value="branch">Filial omborchisi</option>
+            <option value="viewer">Kuzatuvchi</option>
+            <option value="admin">Administrator</option>
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Filial</label>
+          <select class="form-control" id="nu-branch">${brOpts}</select></div>
+        <div class="form-group"><label class="form-label">Telefon</label>
+          <input class="form-control" id="nu-phone" placeholder="+998 90 123 45 67"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
+        <button class="btn btn-primary" onclick="saveNewUser()"><i class="ti ti-user-plus"></i>Yaratish</button>
+      </div>
+    </div>`);
+}
+
+async function saveNewUser() {
+  const username  = document.getElementById('nu-username')?.value.trim();
+  const password  = document.getElementById('nu-password')?.value;
+  const full_name = document.getElementById('nu-fullname')?.value.trim();
+  const role      = document.getElementById('nu-role')?.value;
+  const branch_id = document.getElementById('nu-branch')?.value || null;
+  const phone     = document.getElementById('nu-phone')?.value.trim();
+  if (!username) { toast('Login kerak', 'error'); return; }
+  if (!password || password.length < 4) { toast('Parol kamida 4 ta belgidan iborat bo\'lsin', 'error'); return; }
+  try {
+    await api('POST', '/api/admin/users', { username, password, full_name, role, branch_id, phone });
+    toast(`"${username}" foydalanuvchisi yaratildi ✅`);
+    closeModal(true);
     renderSection('users');
   } catch (e) { toast(e.message, 'error'); }
 }
