@@ -123,26 +123,25 @@ function _purchSupChange() {
 }
 
 // Filial tanlanganida datalist ni yangilash
-function _purchBranchChange() {
-  const brId = document.getElementById('xbr').value;
-  const dl = document.getElementById('xp-list');
-  if (!dl) return;
+function _purchBranchChange(keepId) {
+  const brId = document.getElementById('xbr')?.value;
+  const sel  = document.getElementById('xp');
+  if (!sel) return;
+  const curId = keepId || sel.value || '';
   const prods = brId ? products.filter(p => p.branch_id == brId) : products;
-  dl.innerHTML = prods.map(p => `<option value="${esc(p.name)}"></option>`).join('');
+  sel.innerHTML = `<option value="">— Mahsulot tanlang —</option>` +
+    prods.map(p => `<option value="${p.id}" data-name="${esc(p.name)}" data-unit="${esc(p.unit||'')}" data-stock="${p.current_stock||0}" ${String(p.id) === String(curId) ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
   _purchProductChange();
   _autoFillSupplier();
 }
 
-// Mahsulot va filialga qarab ta'minotchini avtomatik tanlash
 function _autoFillSupplier() {
   const brId  = document.getElementById('xbr')?.value;
-  const pName = (document.getElementById('xp')?.value || '').trim();
+  const pid   = document.getElementById('xp')?.value;
   const xs    = document.getElementById('xs');
-  if (!xs || !pName) return;
+  if (!xs || !pid) return;
 
-  const prod = products.find(p =>
-    p.name.toLowerCase() === pName.toLowerCase() && (!brId || p.branch_id == brId)
-  ) || products.find(p => p.name.toLowerCase() === pName.toLowerCase());
+  const prod = products.find(p => p.id == pid);
 
   if (!prod || !prod.supplier_id) return;
 
@@ -158,29 +157,18 @@ function _autoFillSupplier() {
   }
 }
 
-// Mahsulot nomi yozilganda — omborada bormi yo'qligini aniqlash
 function _purchProductChange() {
-  const brId  = document.getElementById('xbr')?.value;
-  const pName = document.getElementById('xp')?.value.trim();
-  const newRow = document.getElementById('xp-new-fields');
-  if (!newRow) return;
-  const found = products.find(p =>
-    p.name.toLowerCase() === (pName || '').toLowerCase() && (!brId || p.branch_id == brId)
-  );
-  // Yangi mahsulot maydonlarini ko'rsatish/yashirish
-  newRow.style.display = (!pName || found) ? 'none' : 'flex';
-  const hint = document.getElementById('xp-hint');
-  if (hint) {
-    if (!pName) { hint.textContent = ''; hint.style.display = 'none'; return; }
-    hint.style.display = 'block';
-    if (found) {
-      hint.style.color = '#166534';
-      hint.innerHTML = `<i class="ti ti-check"></i> Ombordan: <b>${found.current_stock} ${esc(found.unit || '')}</b>`;
-    } else {
-      hint.style.color = '#9a3412';
-      hint.innerHTML = `<i class="ti ti-info-circle"></i> Omborда yo'q — yangi mahsulot yaratiladi`;
-    }
-  }
+  const sel   = document.getElementById('xp');
+  const hint  = document.getElementById('xp-hint');
+  if (!sel || !hint) return;
+  const opt   = sel.options[sel.selectedIndex];
+  const pid   = sel.value;
+  if (!pid) { hint.style.display = 'none'; _autoFillSupplier(); return; }
+  const stock = opt?.dataset?.stock ?? '?';
+  const unit  = opt?.dataset?.unit  || '';
+  hint.style.display = 'block';
+  hint.style.color   = '#166534';
+  hint.innerHTML = `<i class="ti ti-check"></i> Omborda: <b>${stock} ${esc(unit)}</b>`;
   _autoFillSupplier();
 }
 
@@ -205,32 +193,10 @@ function _purchModal(title, saveFn, opts = {}) {
           </select></div>
         <div class="form-group">
           <label class="form-label">Mahsulot *</label>
-          <input class="form-control" id="xp" list="xp-list"
-            placeholder="Mahsulot nomi (yozing yoki tanlang)"
-            value="${esc(opts.product_name || '')}" autocomplete="off"
-            oninput="_purchProductChange()">
-          <datalist id="xp-list">${
-            (typeof catalogItems !== 'undefined' && catalogItems.length
-              ? catalogItems
-              : products
-            ).map(p => `<option value="${esc(p.name)}"></option>`).join('')
-          }</datalist>
+          <select class="form-control" id="xp" onchange="_purchProductChange()">
+            <option value="">— Mahsulot tanlang —</option>
+          </select>
           <div id="xp-hint" style="font-size:11px;margin-top:4px;display:none"></div>
-        </div>
-      </div>
-
-      <!-- Yangi mahsulot uchun qo'shimcha maydonlar (omborda yo'q bo'lsa) -->
-      <div class="form-row" id="xp-new-fields" style="display:none;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px;gap:10px">
-        <div class="form-group" style="margin:0;flex:1"><label class="form-label">Kategoriya</label>
-          <input class="form-control" id="xcat" list="xcat-list" placeholder="Oziq-ovqat, Ofis..." autocomplete="off">
-          <datalist id="xcat-list">${catOpts}</datalist>
-        </div>
-        <div class="form-group" style="margin:0;flex:1"><label class="form-label">Birlik</label>
-          <input class="form-control" id="xunit" list="xunit-list" placeholder="kg, dona, litr...">
-          <datalist id="xunit-list">
-            <option value="kg"><option value="gr"><option value="litr"><option value="ml">
-            <option value="dona"><option value="quti"><option value="rulon"><option value="metr">
-          </datalist>
         </div>
       </div>
 
@@ -256,7 +222,7 @@ function _purchModal(title, saveFn, opts = {}) {
       </div>
     </div>`);
 
-  _purchBranchChange();
+  _purchBranchChange(opts.product_id || '');
   _purchSupChange();
 }
 
@@ -264,8 +230,8 @@ function openAddPurchase(preId) {
   const preProd   = preId ? products.find(p => p.id == preId) : null;
   const branchId  = preProd ? preProd.branch_id : (branches[0]?.id ?? null);
   _purchModal('Sotib olish qoʻshish', 'savePurchase(null)', {
-    branch_id:    branchId,
-    product_name: preProd?.name || ''
+    branch_id:  branchId,
+    product_id: preProd?.id || ''
   });
 }
 
@@ -273,45 +239,26 @@ function openEditPurchase(id) {
   const p = purchases.find(x => x.id == id); if (!p) return;
   _purchModal('Sotib olishni tahrirlash', `savePurchase(${id})`, {
     branch_id:    p.branch_id,
-    product_name: p.product_name || '',
+    product_id:   p.product_id || '',
     quantity:     p.quantity,
     unit_price:   p.unit_price,
     purchase_date: p.purchase_date,
     supplier_id:  p.supplier_id || '',
-    note:         p.note || '',
-    delivery_cost: p.delivery_cost || ''
+    note:         p.note || ''
   });
 }
 
 async function savePurchase(id) {
   const brId        = document.getElementById('xbr').value;
-  const pName       = document.getElementById('xp').value.trim();
+  const prodId      = document.getElementById('xp').value;
   const quantity    = parseFloat(document.getElementById('xq').value);
   const suppId      = document.getElementById('xs')?.value || '';
   const unitPrice   = parseFloat(document.getElementById('xpr').value) || 0;
-  const deliveryCost = 0;
-  if (!pName)                     { toast('Mahsulot nomini kiriting', 'error'); return; }
+  if (!prodId)                    { toast('Mahsulot tanlang', 'error'); return; }
   if (!quantity || quantity <= 0) { toast('Miqdorni kiriting', 'error'); return; }
 
-  // Mahsulotni nom va filial bo'yicha topamiz
-  let prod = products.find(p =>
-    p.name.toLowerCase() === pName.toLowerCase() && (!brId || p.branch_id == brId)
-  ) || products.find(p => p.name.toLowerCase() === pName.toLowerCase());
-
-  // Omborda yo'q bo'lsa — yangi mahsulot yaratamiz
-  if (!prod) {
-    try {
-      prod = await api('POST', '/api/products', {
-        name:        pName,
-        branch_id:   brId || null,
-        category:    document.getElementById('xcat')?.value || '',
-        unit:        document.getElementById('xunit')?.value || '',
-        daily_usage: 0,
-        current_stock: 0
-      });
-      products.push(prod);
-    } catch (e) { toast('Mahsulot yaratishda xato: ' + e.message, 'error'); return; }
-  }
+  let prod = products.find(p => p.id == prodId);
+  if (!prod) { toast('Mahsulot topilmadi', 'error'); return; }
 
   // Ulangan ta'minotchi tanlangan → bot orqali buyurtma
   if (suppId && !id) {
@@ -367,19 +314,16 @@ async function cancelOrder(id) {
 
 async function arrivedOrder(id) {
   if (!confirm('Tovar omborga kelganligini tasdiqlaysizmi?')) return;
-  const dlv = prompt('Dostavka narxi (so\'m)?\n0 = bepul');
-  if (dlv === null) return; // cancelled
-  const deliveryCost = parseFloat(dlv) || 0;
-  try {
-    const res = await fetch(`/api/supply-orders/${id}/arrived`, {
-      method: 'PUT',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ delivery_cost: deliveryCost })
-    });
-    if (res.ok) { toast('Tovar omborga kiritildi!'); await loadAll(); renderSection(currentSection); }
-    else { const data = await res.json().catch(() => ({})); alert('Xatolik: ' + (data.error || res.status)); }
-  } catch (e) { toast(e.message, 'error'); }
+  const dlvRaw = prompt('Dostavka narxi (so\'m)?\n0 yoki bo\'sh = bepul');
+  if (dlvRaw === null) return;
+  const deliveryCost = parseFloat(dlvRaw) || 0;
+  const res = await fetch(`/api/supply-orders/${id}/arrived`, {
+    method: 'PUT', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ delivery_cost: deliveryCost })
+  });
+  if (res.ok) { toast('Tovar omborga kiritildi!'); await loadAll(); renderSection(currentSection); }
+  else alert('Xatolik yuz berdi');
 }
 
 async function delPurchase(id) {

@@ -619,13 +619,11 @@ app.put('/api/supply-orders/:id/arrived', auth, canWrite, async (req, res) => {
     if (!members || !members.length)
       members = [{ product_id: order.product_id, name: order.product_name, qty: order.qty, unit: order.unit }];
 
-    const bodyDeliveryCost = req.body && req.body.delivery_cost != null ? parseFloat(req.body.delivery_cost) || 0 : null;
-    const effectiveDeliveryCost = bodyDeliveryCost !== null ? bodyDeliveryCost : (order.delivery_cost || 0);
-
+    const arrivedDelivery = (req.body && req.body.delivery_cost != null) ? (parseFloat(req.body.delivery_cost) || 0) : (order.delivery_cost || 0);
     let firstRow = true;
     for (const m of members) {
       if (!m.product_id || !(m.qty > 0)) continue;
-      const delivery = firstRow ? effectiveDeliveryCost : 0;
+      const delivery = firstRow ? arrivedDelivery : 0;
       firstRow = false;
       await db.run2(
         `INSERT INTO purchases (product_id, quantity, unit_price, purchase_date, supplier, supplier_id, note, remaining_qty, delivery_cost, created_at)
