@@ -4,3 +4,6 @@ data/
 *.db-shm
 *.db-wal
 .env
+
+# Claude Code session data
+.claude/
