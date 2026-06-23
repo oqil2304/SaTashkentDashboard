@@ -122,54 +122,63 @@ function _purchSupChange() {
   }
 }
 
-// Filial tanlanganida datalist ni yangilash
-function _purchBranchChange(keepId) {
-  const brId = document.getElementById('xbr')?.value;
-  const sel  = document.getElementById('xp');
-  if (!sel) return;
-  const curId = keepId || sel.value || '';
-  const prods = brId ? products.filter(p => p.branch_id == brId) : products;
-  sel.innerHTML = `<option value="">— Mahsulot tanlang —</option>` +
-    prods.map(p => `<option value="${p.id}" data-name="${esc(p.name)}" data-unit="${esc(p.unit||'')}" data-stock="${p.current_stock||0}" ${String(p.id) === String(curId) ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
-  _purchProductChange();
-  _autoFillSupplier();
+// Katalog mahsulotlar ro'yxati (admin kiritgan)
+function _catalogList() {
+  return (typeof catalogItems !== 'undefined' && catalogItems.length) ? catalogItems : [];
 }
 
+// Belgilangan mahsulotlar bo'yicha ta'minotchini avtomatik tanlash
 function _autoFillSupplier() {
-  const brId  = document.getElementById('xbr')?.value;
-  const pid   = document.getElementById('xp')?.value;
-  const xs    = document.getElementById('xs');
-  if (!xs || !pid) return;
-
-  const prod = products.find(p => p.id == pid);
-
+  const brId = document.getElementById('xbr')?.value;
+  const xs   = document.getElementById('xs');
+  if (!xs) return;
+  // Birinchi belgilangan mahsulotga mos ombor mahsulotini topamiz
+  const checked = document.querySelector('.xp-check:checked');
+  if (!checked) return;
+  const name = checked.dataset.name || '';
+  const prod = products.find(p =>
+    p.name.toLowerCase() === name.toLowerCase() && (!brId || p.branch_id == brId)
+  ) || products.find(p => p.name.toLowerCase() === name.toLowerCase());
   if (!prod || !prod.supplier_id) return;
-
   const sup = suppliers.find(s => s.id == prod.supplier_id && s.telegram_chat_id);
   if (!sup) return;
-
   const bids = sup.branch_ids ? String(sup.branch_ids).split(',').map(x => x.trim()) : [];
   if (bids.length && brId && !bids.includes(String(brId))) return;
-
-  if (xs.value !== String(sup.id)) {
-    xs.value = String(sup.id);
-    _purchSupChange();
-  }
+  if (xs.value !== String(sup.id)) { xs.value = String(sup.id); _purchSupChange(); }
 }
 
-function _purchProductChange() {
-  const sel   = document.getElementById('xp');
-  const hint  = document.getElementById('xp-hint');
-  if (!sel || !hint) return;
-  const opt   = sel.options[sel.selectedIndex];
-  const pid   = sel.value;
-  if (!pid) { hint.style.display = 'none'; _autoFillSupplier(); return; }
-  const stock = opt?.dataset?.stock ?? '?';
-  const unit  = opt?.dataset?.unit  || '';
-  hint.style.display = 'block';
-  hint.style.color   = '#166534';
-  hint.innerHTML = `<i class="ti ti-check"></i> Omborda: <b>${stock} ${esc(unit)}</b>`;
+// Katalog ro'yxatini qidiruv bo'yicha filtrlash
+function _filterCatalog() {
+  const q = (document.getElementById('xp-search')?.value || '').toLowerCase();
+  document.querySelectorAll('#xp-checklist .xp-row').forEach(row => {
+    const n = (row.dataset.name || '').toLowerCase();
+    row.style.display = (!q || n.includes(q)) ? 'flex' : 'none';
+  });
+}
+
+// Mahsulot belgilanganda — miqdor maydonini ko'rsatish/yashirish
+function _toggleCatalogItem(cb) {
+  const row = cb.closest('.xp-row');
+  if (row) {
+    const qty = row.querySelector('.xp-qty');
+    if (qty) { qty.style.display = cb.checked ? 'block' : 'none'; if (cb.checked) qty.focus(); }
+    row.style.background = cb.checked ? '#f0fdf4' : '';
+  }
   _autoFillSupplier();
+}
+
+function _catalogChecklistHtml() {
+  const list = _catalogList();
+  if (!list.length) {
+    return `<div style="padding:14px;text-align:center;color:#9a3412;font-size:13px">
+      Katalog bo'sh. Avval <b>Mahsulotlar</b> bo'limidan mahsulot qo'shing.</div>`;
+  }
+  return list.map(it => `
+    <label class="xp-row" data-name="${esc(it.name)}" style="display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:6px;cursor:pointer;border-bottom:1px solid #f1f5f9">
+      <input type="checkbox" class="xp-check" value="${it.id}" data-name="${esc(it.name)}" data-unit="${esc(it.unit || '')}" onchange="_toggleCatalogItem(this)" style="width:17px;height:17px;flex-shrink:0">
+      <span style="flex:1;font-weight:500">${esc(it.name)} <span style="color:#94a3b8;font-size:11px;font-weight:400">${esc(it.unit || '')}</span></span>
+      <input type="number" class="xp-qty form-control" step="0.01" placeholder="miqdor" style="width:100px;display:none;padding:6px 8px" onclick="event.preventDefault()">
+    </label>`).join('');
 }
 
 function _purchModal(title, saveFn, opts = {}) {
@@ -177,8 +186,6 @@ function _purchModal(title, saveFn, opts = {}) {
   const brOpts  = branches.map(b =>
     `<option value="${b.id}" ${b.id == opts.branch_id ? 'selected' : (opts.branch_id == null && b.id == firstBr?.id ? 'selected' : '')}>${esc(b.name)}</option>`
   ).join('');
-  const catOpts = [...new Set([...PURCH_CATS, ...products.map(p => p.category).filter(Boolean)])]
-    .map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 
   openModal(`
     <div class="modal-header">
@@ -188,114 +195,161 @@ function _purchModal(title, saveFn, opts = {}) {
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group"><label class="form-label">Filial *</label>
-          <select class="form-control" id="xbr" onchange="_purchBranchChange()">
+          <select class="form-control" id="xbr" onchange="_autoFillSupplier()">
             ${brOpts}
           </select></div>
-        <div class="form-group">
-          <label class="form-label">Mahsulot *</label>
-          <select class="form-control" id="xp" onchange="_purchProductChange()">
-            <option value="">— Mahsulot tanlang —</option>
-          </select>
-          <div id="xp-hint" style="font-size:11px;margin-top:4px;display:none"></div>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Miqdor *</label>
-          <input class="form-control" id="xq" type="number" step="0.01" placeholder="10" value="${opts.quantity || ''}"></div>
-        <div class="form-group"><label class="form-label">Birlik narxi (soʻm)</label>
-          <input class="form-control" id="xpr" type="number" placeholder="15000" value="${opts.unit_price || ''}"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Sana</label>
-          <input class="form-control" id="xd" type="date" value="${opts.purchase_date || today()}"></div>
         <div class="form-group"><label class="form-label">Yetkazib beruvchi</label>
           ${_supDropdown(opts.supplier_id)}
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Izoh</label>
-        <input class="form-control" id="xn" placeholder="Qoʻshimcha maʼlumot" value="${esc(opts.note || '')}"></div>
+
+      <div class="form-group">
+        <label class="form-label">Mahsulotlar * <span style="font-weight:400;color:#94a3b8">(bir nechta tanlash mumkin)</span></label>
+        <input class="form-control" id="xp-search" placeholder="🔍 Qidirish..." oninput="_filterCatalog()" style="margin-bottom:8px">
+        <div id="xp-checklist" style="max-height:240px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px">
+          ${_catalogChecklistHtml()}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Sana</label>
+          <input class="form-control" id="xd" type="date" value="${opts.purchase_date || today()}"></div>
+        <div class="form-group"><label class="form-label">Izoh</label>
+          <input class="form-control" id="xn" placeholder="Qoʻshimcha maʼlumot" value="${esc(opts.note || '')}"></div>
+      </div>
       <div id="xs-hint" style="font-size:12px;margin-bottom:8px"></div>
       <div class="form-actions">
         <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
-        <button class="btn btn-primary" onclick="${saveFn}"><i class="ti ti-check"></i>Saqlash</button>
+        <button class="btn btn-primary" onclick="${saveFn}"><i class="ti ti-check"></i>Buyurtma berish</button>
       </div>
     </div>`);
 
-  _purchBranchChange(opts.product_id || '');
   _purchSupChange();
 }
 
 function openAddPurchase(preId) {
-  const preProd   = preId ? products.find(p => p.id == preId) : null;
-  const branchId  = preProd ? preProd.branch_id : (branches[0]?.id ?? null);
-  _purchModal('Sotib olish qoʻshish', 'savePurchase(null)', {
-    branch_id:  branchId,
-    product_id: preProd?.id || ''
-  });
+  const preProd  = preId ? products.find(p => p.id == preId) : null;
+  const branchId = preProd ? preProd.branch_id : (branches[0]?.id ?? null);
+  _purchModal('Sotib olish — buyurtma', 'savePurchase(null)', { branch_id: branchId });
 }
 
+// Tahrirlash — mavjud bitta sotib olishni o'zgartirish (oddiy forma)
 function openEditPurchase(id) {
   const p = purchases.find(x => x.id == id); if (!p) return;
-  _purchModal('Sotib olishni tahrirlash', `savePurchase(${id})`, {
-    branch_id:    p.branch_id,
-    product_id:   p.product_id || '',
-    quantity:     p.quantity,
-    unit_price:   p.unit_price,
-    purchase_date: p.purchase_date,
-    supplier_id:  p.supplier_id || '',
-    note:         p.note || ''
+  const brOpts = branches.map(b =>
+    `<option value="${b.id}" ${b.id == p.branch_id ? 'selected' : ''}>${esc(b.name)}</option>`
+  ).join('');
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">Sotib olishni tahrirlash</div>
+      <button class="modal-close" onclick="closeModal(true)"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Mahsulot</label>
+        <input class="form-control" value="${esc(p.product_name || '')}" disabled></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Filial</label>
+          <select class="form-control" id="exbr" disabled>${brOpts}</select></div>
+        <div class="form-group"><label class="form-label">Miqdor *</label>
+          <input class="form-control" id="exq" type="number" step="0.01" value="${p.quantity || ''}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Birlik narxi (soʻm)</label>
+          <input class="form-control" id="expr" type="number" value="${p.unit_price || ''}"></div>
+        <div class="form-group"><label class="form-label">Sana</label>
+          <input class="form-control" id="exd" type="date" value="${(p.purchase_date||today()).slice(0,10)}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Izoh</label>
+        <input class="form-control" id="exn" value="${esc(p.note || '')}"></div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
+        <button class="btn btn-primary" onclick="saveEditPurchase(${id}, ${p.product_id || 'null'})"><i class="ti ti-check"></i>Saqlash</button>
+      </div>
+    </div>`);
+}
+
+async function saveEditPurchase(id, productId) {
+  const quantity = parseFloat(document.getElementById('exq').value);
+  if (!quantity || quantity <= 0) { toast('Miqdorni kiriting', 'error'); return; }
+  const body = {
+    product_id:    productId,
+    quantity,
+    unit_price:    parseFloat(document.getElementById('expr').value) || 0,
+    purchase_date: document.getElementById('exd')?.value || today(),
+    branch_id:     document.getElementById('exbr')?.value || null,
+    note:          document.getElementById('exn')?.value || ''
+  };
+  try {
+    await api('PUT', `/api/purchases/${id}`, body);
+    toast('Yangilandi');
+    closeModal(true);
+    await loadAll();
+    renderSection(currentSection);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// Tanlangan katalog mahsulotini ombordagi mahsulotga moslash (yo'q bo'lsa yaratish)
+async function _findOrCreateProduct(name, unit, brId) {
+  let prod = products.find(p =>
+    p.name.toLowerCase() === name.toLowerCase() && (!brId || p.branch_id == brId)
+  );
+  if (prod) return prod;
+  prod = await api('POST', '/api/products', {
+    name, branch_id: brId || null, unit: unit || '', daily_usage: 0, current_stock: 0
   });
+  products.push(prod);
+  return prod;
 }
 
 async function savePurchase(id) {
-  const brId        = document.getElementById('xbr').value;
-  const prodId      = document.getElementById('xp').value;
-  const quantity    = parseFloat(document.getElementById('xq').value);
-  const suppId      = document.getElementById('xs')?.value || '';
-  const unitPrice   = parseFloat(document.getElementById('xpr').value) || 0;
-  if (!prodId)                    { toast('Mahsulot tanlang', 'error'); return; }
-  if (!quantity || quantity <= 0) { toast('Miqdorni kiriting', 'error'); return; }
+  const brId   = document.getElementById('xbr').value;
+  const suppId = document.getElementById('xs')?.value || '';
+  const note   = document.getElementById('xn')?.value || '';
+  const pdate  = document.getElementById('xd')?.value || today();
 
-  let prod = products.find(p => p.id == prodId);
-  if (!prod) { toast('Mahsulot topilmadi', 'error'); return; }
+  // Belgilangan mahsulotlarni yig'amiz
+  const items = [];
+  document.querySelectorAll('#xp-checklist .xp-check:checked').forEach(cb => {
+    const row = cb.closest('.xp-row');
+    const qty = parseFloat(row?.querySelector('.xp-qty')?.value);
+    items.push({ name: cb.dataset.name, unit: cb.dataset.unit || '', qty });
+  });
 
-  // Ulangan ta'minotchi tanlangan → bot orqali buyurtma
-  if (suppId && !id) {
-    try {
+  if (!items.length)              { toast('Kamida bitta mahsulot tanlang', 'error'); return; }
+  if (items.some(i => !i.qty || i.qty <= 0)) {
+    toast('Har bir tanlangan mahsulot uchun miqdor kiriting', 'error'); return;
+  }
+  if (!brId)                      { toast('Filialni tanlang', 'error'); return; }
+
+  try {
+    // Har bir mahsulotni ombor mahsulotiga moslaymiz
+    const members = [];
+    for (const it of items) {
+      const prod = await _findOrCreateProduct(it.name, it.unit, brId);
+      members.push({ product_id: prod.id, name: prod.name, qty: it.qty, unit: prod.unit || it.unit || '' });
+    }
+
+    // Ulangan ta'minotchi tanlangan → bot orqali buyurtma (bitta zakaz, ko'p mahsulot)
+    if (suppId) {
       await api('POST', '/api/purchases/manual-order', {
-        product_id:  prod.id,
-        quantity,
-        unit_price:  unitPrice,
+        members,
+        product_id:  members[0].product_id,
+        quantity:    members[0].qty,
         supplier_id: suppId,
-        branch_id:   brId || prod.branch_id || null,
-        delivery_cost: deliveryCost,
-        note:        document.getElementById('xn')?.value || ''
+        branch_id:   brId,
+        note
       });
       toast("Ta'minotchiga faktura so'rovi yuborildi ✅");
-      closeModal(true);
-      await loadAll();
-      renderSection(currentSection);
-    } catch (e) { toast(e.message, 'error'); }
-    return;
-  }
-
-  // Oddiy — to'g'ridan-to'g'ri omborga
-  const supObj = suppId ? suppliers.find(s => s.id == suppId) : null;
-  const body = {
-    product_id:    prod.id,
-    quantity,
-    unit_price:    unitPrice,
-    purchase_date: document.getElementById('xd')?.value || today(),
-    supplier:      supObj?.name || '',
-    supplier_id:   supObj?.id || null,
-    delivery_cost: deliveryCost,
-    note:          document.getElementById('xn')?.value || ''
-  };
-  try {
-    if (id) await api('PUT', `/api/purchases/${id}`, body);
-    else    await api('POST', '/api/purchases', body);
-    toast(id ? 'Yangilandi' : "Qoʻshildi");
+    } else {
+      // Ta'minotchisiz — har bir mahsulotni to'g'ridan-to'g'ri omborga
+      for (const m of members) {
+        await api('POST', '/api/purchases', {
+          product_id: m.product_id, quantity: m.qty, unit_price: 0,
+          purchase_date: pdate, supplier: '', supplier_id: null, note
+        });
+      }
+      toast(`${members.length} ta mahsulot omborga qo'shildi ✅`);
+    }
     closeModal(true);
     await loadAll();
     renderSection(currentSection);

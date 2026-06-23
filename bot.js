@@ -275,12 +275,17 @@ async function autoCheckUrgent() {
 // ── Ta'minotchiga xabar ─────────────────────────────────────────────────────
 async function sendToSupplier(order) {
   if (!order.supplier_chat_id) return false;
+  // members yoki members_json — ko'p mahsulotli zakaz
+  let members = order.members;
+  if (!members && order.members_json) {
+    try { members = JSON.parse(order.members_json); } catch (_) { members = null; }
+  }
   let body;
-  if (order.members && order.members.length > 1) {
-    const list = order.members.map(m => `   • ${m.name}: <b>${m.qty} ${m.unit}</b>`).join('\n');
-    body = `Bizda <b>${order.product_name}</b> tugab bormoqda.\nZakaz (jami ${order.qty} ${order.unit}):\n${list}\n`;
+  if (members && members.length > 1) {
+    const list = members.map(m => `   • ${m.name}: <b>${m.qty} ${m.unit || ''}</b>`).join('\n');
+    body = `Bizga quyidagi mahsulotlar kerak:\n${list}\n`;
   } else {
-    body = `Bizda <b>${order.product_name}</b> tugab bormoqda.\nZakaz miqdori: <b>${order.qty} ${order.unit}</b>\n`;
+    body = `Bizga <b>${order.product_name}</b> kerak.\nZakaz miqdori: <b>${order.qty} ${order.unit}</b>\n`;
   }
   const text = `🏪 <b>SaTashkent Ta'minot Bo'limidan zakaz</b>\n\n` +
     `Salom, <b>${order.supplier_name}</b>!\n\n` +
