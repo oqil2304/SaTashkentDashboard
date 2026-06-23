@@ -98,12 +98,14 @@ function _qRemove(map, key, orderId) {
 
 // Zakaz holatlari uchun chiroyli yorliqlar
 const ORDER_STATUS = {
+  pending_admin:    '⏳ Admin tasdiqini kutmoqda',
   approved:         '✅ Tasdiqlangan',
-  manual_pending:   '⏳ Yuborildi',
-  awaiting_invoice: '📄 Faktura kutilyapti',
-  invoice_received: '✅ Faktura keldi',
-  delivered:        '📦 Yetkazildi',
-  cancelled:        '❌ Bekor qilingan'
+  manual_pending:   '📋 Qo\'lda kiritilgan',
+  awaiting_invoice: '📄 Hisob-faktura kutilmoqda',
+  invoice_received: '🔍 Tekshirilmoqda',
+  in_transit:       '🚚 Yo\'lda',
+  delivered:        '✅ Yetkazildi',
+  cancelled:        '❌ Bekor qilindi'
 };
 
 // Admin uchun doimiy klaviatura (pastda turadigan tugmalar)
@@ -338,6 +340,18 @@ async function completeOrder(orderId) {
   if (ADMIN_CHAT_ID)
     await sendMessage(ADMIN_CHAT_ID, `✅ <b>${order.product_name}</b> — ${order.qty} ${order.unit} omborga kiritildi!\nZakaz yakunlandi.`);
   console.log(`[bot] Zakaz #${orderId} yakunlandi — ${members.length} ta pozitsiya ombori yangilandi`);
+}
+
+async function setInTransit(orderId) {
+  const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [orderId]);
+  if (!order) return;
+  await db.run2("UPDATE supply_orders SET status='in_transit', updated_at=datetime('now') WHERE id=?", [orderId]);
+  saveDb();
+  const name = order.product_name || 'Mahsulot';
+  const qty = order.qty || '';
+  const unit = order.unit || '';
+  const adminMsg = `🚚 <b>${name}</b> (${qty} ${unit}) yo'lda!\n\nTovar omborga kelganda dashboard orqali <b>"✅ Keldi"</b> tugmasini bosing.`;
+  if (ADMIN_CHAT_ID) await sendMessage(ADMIN_CHAT_ID, adminMsg, { parse_mode: 'HTML' });
 }
 
 // ── Miqdor so'rash oqimi (admin tasdiqlagandan keyin) ───────────────────────
@@ -750,8 +764,8 @@ async function handleMessage(msg) {
       if (/^skip$/i.test((text || '').trim())) {
         _qRemove(pendingChecks, chatId, check.order_id);
         if (check.prompt_msg_id) checkByReply.delete(check.prompt_msg_id);
-        await sendMessage(chatId, `🧾 <b>${check.product_name}</b> cheksiz yakunlanmoqda...`);
-        await completeOrder(check.order_id);
+        await sendMessage(chatId, `🧾 <b>${check.product_name}</b> cheksiz yo'lda deb belgilanmoqda...`);
+        await setInTransit(check.order_id);
         return;
       }
       let fileId = null;
@@ -769,7 +783,7 @@ async function handleMessage(msg) {
         await sendMessage(chatId, `🧾 <b>${check.product_name}</b> cheki ta'minotchiga yuborildi.` +
           (remaining ? `\n📌 Yana ${remaining} ta zakaz uchun chek kutilmoqda.` : ''));
       }
-      await completeOrder(check.order_id);
+      await setInTransit(check.order_id);
       return;
     }
     return;
@@ -1007,4 +1021,4 @@ async function startBot() {
   setInterval(autoCheckUrgent, AUTO_CHECK_MS);
 }
 
-module.exports = { startBot, notifyLowStock, autoCheckUrgent, completeOrder, sendToSupplier, getBotUsername: () => _botUsername };
+module.exports = { startBot, notifyLowStock, autoCheckUrgent, completeOrder, setInTransit, sendToSupplier, getBotUsername: () => _botUsername };

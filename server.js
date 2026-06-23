@@ -577,6 +577,34 @@ app.put('/api/supply-orders/:id/cancel', auth, canWrite, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/api/supply-orders/:id/arrived', auth, canWrite, async (req, res) => {
+  try {
+    const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [req.params.id]);
+    if (!order) return res.status(404).json({ error: 'Topilmadi' });
+    if (order.status !== 'in_transit') return res.status(400).json({ error: 'Zakaz yo\'lda emas' });
+
+    let members = null;
+    try { members = order.members_json ? JSON.parse(order.members_json) : null; } catch (_) {}
+    if (!members || !members.length)
+      members = [{ product_id: order.product_id, name: order.product_name, qty: order.qty, unit: order.unit }];
+
+    let firstRow = true;
+    for (const m of members) {
+      if (!m.product_id || !(m.qty > 0)) continue;
+      const delivery = firstRow ? (order.delivery_cost || 0) : 0;
+      firstRow = false;
+      await db.run2(
+        `INSERT INTO purchases (product_id, quantity, unit_price, purchase_date, supplier, supplier_id, note, remaining_qty, delivery_cost, created_at)
+         VALUES (?, ?, ?, date('now'), ?, ?, 'Telegram bot orqali zakaz', ?, ?, datetime('now'))`,
+        [m.product_id, m.qty, order.unit_price || 0, order.supplier_name || '', order.supplier_id || null, m.qty, delivery]);
+      await db.run2('UPDATE products SET current_stock = current_stock + ? WHERE id=?', [m.qty, m.product_id]);
+    }
+    await db.run2("UPDATE supply_orders SET status='delivered', updated_at=datetime('now') WHERE id=?", [order.id]);
+    saveDb();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Admin ombor tekshiruvi — botga buyurtma ro'yxatini yuborish
 app.post('/api/bot/check-stock', auth, adminOnly, async (req, res) => {
   try {

@@ -53,6 +53,7 @@ function applyPurchaseFilter() {
     awaiting_invoice: ['📄 Faktura kutilmoqda', '#1e40af', '#eff6ff', '#bfdbfe'],
     invoice_received: ['✅ Faktura keldi', '#166534', '#f0fdf4', '#bbf7d0'],
     approved:         ['✅ Tasdiqlangan', '#166534', '#f0fdf4', '#bbf7d0'],
+    in_transit:       ['🚚 Yo\'lda', '#0369a1', '#e0f2fe', '#7dd3fc'],
   };
   let total = 0, totalDelivery = 0;
   tbody.innerHTML = list.map(p => {
@@ -75,7 +76,10 @@ function applyPurchaseFilter() {
       <td style="color:#64748b">${esc(p.supplier || '—')}</td>
       <td style="white-space:nowrap;text-align:right">
         ${isPending
-          ? `<button class="btn btn-sm btn-danger btn-icon" onclick="cancelOrder(${p.id})" title="Bekor qilish"><i class="ti ti-x"></i></button>`
+          ? (p.status === 'in_transit'
+              ? `<button class="btn btn-sm btn-success btn-icon" onclick="arrivedOrder(${p.id})" title="Keldi">✅ Keldi</button>
+                 <button class="btn btn-sm btn-danger btn-icon" onclick="cancelOrder(${p.id})" title="Bekor qilish"><i class="ti ti-x"></i></button>`
+              : `<button class="btn btn-sm btn-danger btn-icon" onclick="cancelOrder(${p.id})" title="Bekor qilish"><i class="ti ti-x"></i></button>`)
           : `<button class="btn btn-sm btn-secondary btn-icon" onclick="openEditPurchase(${p.id})"><i class="ti ti-edit"></i></button>
              <button class="btn btn-sm btn-danger btn-icon" onclick="delPurchase(${p.id})"><i class="ti ti-trash"></i></button>`
         }
@@ -358,6 +362,13 @@ async function cancelOrder(id) {
     await loadAll();
     renderSection(currentSection);
   } catch (e) { toast(e.message, 'error'); }
+}
+
+async function arrivedOrder(id) {
+  if (!confirm('Tovar omborga kelganligini tasdiqlaysizmi?')) return;
+  const res = await fetch(`/api/supply-orders/${id}/arrived`, { method: 'PUT', credentials: 'include' });
+  if (res.ok) { toast('Tovar omborga kiritildi!'); await loadAll(); renderSection(currentSection); }
+  else alert('Xatolik yuz berdi');
 }
 
 async function delPurchase(id) {
