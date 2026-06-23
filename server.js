@@ -127,38 +127,12 @@ app.post('/api/admin/users', auth, adminOnly, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Parolni unutdim — tiklash kodini yaratish (ekranda koʻrsatiladi)
-app.post('/api/auth/forgot', async (req, res) => {
-  const { account } = req.body || {};
-  if (!account) return res.status(400).json({ error: 'Login yoki email kiriting' });
-  try {
-    const id = String(account).trim().toLowerCase();
-    const user = await db.get2('SELECT * FROM users WHERE lower(username)=? OR lower(email)=?', [id, id]);
-    // Maxfiylik uchun foydalanuvchi yoʻqligini oshkor qilmaymiz, lekin localhost — kodni qaytaramiz
-    if (!user) return res.status(404).json({ error: 'Bunday login yoki email topilmadi' });
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const expires = Date.now() + 15 * 60 * 1000; // 15 daqiqa
-    await db.run2('UPDATE users SET reset_code=?, reset_expires=? WHERE id=?', [code, expires, user.id]);
-    res.json({ success: true, code, username: user.username, message: 'Tiklash kodi yaratildi (15 daqiqa amal qiladi)' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+// Parolni o'z-o'zidan tiklash o'chirilgan — parolni faqat admin yangilaydi
+app.post('/api/auth/forgot', (req, res) => {
+  res.status(403).json({ error: 'Parolni tiklash yopiq. Iltimos, administratorga murojaat qiling.' });
 });
-
-// Kod orqali yangi parol oʻrnatish
-app.post('/api/auth/reset', async (req, res) => {
-  const { account, code, password } = req.body || {};
-  if (!account || !code || !password) return res.status(400).json({ error: 'Barcha maydonlar kerak' });
-  if (String(password).length < 4) return res.status(400).json({ error: 'Parol kamida 4 belgidan iborat boʻlsin' });
-  try {
-    const id = String(account).trim().toLowerCase();
-    const user = await db.get2('SELECT * FROM users WHERE lower(username)=? OR lower(email)=?', [id, id]);
-    if (!user || !user.reset_code || String(user.reset_code) !== String(code).trim())
-      return res.status(400).json({ error: "Kod noto'g'ri" });
-    if (!user.reset_expires || Date.now() > user.reset_expires)
-      return res.status(400).json({ error: 'Kod muddati tugagan, qaytadan urinib koʻring' });
-    await db.run2('UPDATE users SET password_hash=?, reset_code=NULL, reset_expires=NULL WHERE id=?',
-      [bcrypt.hashSync(password, 10), user.id]);
-    res.json({ success: true, message: 'Parol yangilandi, endi kirishingiz mumkin' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+app.post('/api/auth/reset', (req, res) => {
+  res.status(403).json({ error: 'Parolni tiklash yopiq. Iltimos, administratorga murojaat qiling.' });
 });
 
 app.post('/api/auth/logout', (req, res) => { res.clearCookie('token'); res.json({ success: true }); });

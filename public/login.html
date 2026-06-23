@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-  <link rel="icon" href="/logo.png?v=29" type="image/png" />
+  <link rel="icon" href="/logo.png?v=30" type="image/png" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -115,7 +115,7 @@
   <div class="login-card">
     <div class="logo-wrap">
       <div class="logo-circle">
-        <img src="/logo.png?v=29" alt="SaTashkent Supply" />
+        <img src="/logo.png?v=30" alt="SaTashkent Supply" />
       </div>
       <div class="logo-title">SaTashkent Ta'minot</div>
       <div class="logo-subtitle">Bosh Boshqaruv Paneli</div>
@@ -148,52 +148,7 @@
         </div>
         <button class="btn" type="submit">Kirish</button>
       </form>
-      <div class="link-row">
-        <button class="link" id="to-forgot">Parolni unutdingizmi?</button>
-      </div>
-    </div>
-
-    <!-- PAROLNI UNUTDIM -->
-    <div class="pane" id="pane-forgot">
-      <form id="forgot-form">
-        <div class="form-group">
-          <label class="form-label" for="f-account">Login yoki Gmail</label>
-          <div class="input-wrap">
-            <i class="ti ti-user input-icon"></i>
-            <input class="form-input" type="text" id="f-account" placeholder="login yoki email@gmail.com" required />
-          </div>
-        </div>
-        <button class="btn" type="submit">Tiklash kodini olish</button>
-      </form>
-
-      <div class="code-box" id="code-box">
-        <div class="lbl">Sizning tiklash kodingiz:</div>
-        <div class="code" id="reset-code">------</div>
-        <div class="hint2">15 daqiqa amal qiladi. Pastda kodni kiriting.</div>
-      </div>
-
-      <form id="reset-form" style="display:none;margin-top:8px">
-        <div class="form-group">
-          <label class="form-label" for="rs-code">Tiklash kodi</label>
-          <div class="input-wrap">
-            <i class="ti ti-key input-icon"></i>
-            <input class="form-input" type="text" id="rs-code" placeholder="6 xonali kod" required />
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="rs-password">Yangi parol</label>
-          <div class="input-wrap">
-            <i class="ti ti-lock input-icon"></i>
-            <input class="form-input" type="password" id="rs-password" placeholder="••••••••" autocomplete="new-password" required />
-            <button type="button" class="eye-btn" onclick="toggleEye('rs-password',this)" tabindex="-1"><i class="ti ti-eye"></i></button>
-          </div>
-        </div>
-        <button class="btn" type="submit">Parolni yangilash</button>
-      </form>
-
-      <div class="link-row">
-        <button class="link" id="to-login"><i class="ti ti-arrow-left" style="vertical-align:-3px"></i> Kirishga qaytish</button>
-      </div>
+      <div class="hint">Parolni unutsangiz — administratorga murojaat qiling.</div>
     </div>
   </div>
 
@@ -213,8 +168,6 @@
       document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.pane === name));
     }
     document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchPane(t.dataset.pane)));
-    $('to-forgot').addEventListener('click', () => switchPane('forgot'));
-    $('to-login').addEventListener('click', () => switchPane('login'));
 
     async function post(url, body) {
       const res = await fetch(url, {
@@ -235,44 +188,6 @@
       if (ok) { window.location.href = '/dashboard'; return; }
       showErr(data.error || 'Kirish xatosi');
       btn.disabled = false; btn.textContent = 'Kirish';
-    });
-
-    // PAROLNI UNUTDIM — kod olish
-    $('forgot-form').addEventListener('submit', async (e) => {
-      e.preventDefault(); clearMsg();
-      const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Yuborilmoqda...';
-      const acc = $('f-account').value.trim();
-      const { ok, data } = await post('/api/auth/forgot', { account: acc });
-      if (ok) {
-        $('reset-code').textContent = data.code;
-        $('code-box').classList.add('show');
-        $('reset-form').style.display = 'block';
-        $('rs-code').value = data.code;        // qulaylik uchun avtomatik to'ldiramiz
-        $('reset-form').dataset.account = acc;
-      } else {
-        showErr(data.error || 'Xatolik');
-      }
-      btn.disabled = false; btn.textContent = 'Tiklash kodini olish';
-    });
-
-    // PAROLNI UNUTDIM — yangi parol
-    $('reset-form').addEventListener('submit', async (e) => {
-      e.preventDefault(); clearMsg();
-      const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Yangilanmoqda...';
-      const { ok, data } = await post('/api/auth/reset', {
-        account: $('reset-form').dataset.account || $('f-account').value.trim(),
-        code: $('rs-code').value.trim(),
-        password: $('rs-password').value
-      });
-      if (ok) {
-        switchPane('login');
-        $('code-box').classList.remove('show');
-        $('reset-form').style.display = 'none';
-        showOk(data.message || 'Parol yangilandi, endi kirishingiz mumkin');
-      } else {
-        showErr(data.error || 'Xatolik');
-      }
-      btn.disabled = false; btn.textContent = 'Parolni yangilash';
     });
 
     function toggleEye(id, btn) {
