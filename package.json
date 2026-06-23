@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "admin-bot": "node admin-bot.js",
+    "client-bot": "node client-bot.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

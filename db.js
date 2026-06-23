@@ -42,7 +42,8 @@ const db = {
 // init() ichida to'g'ridan-to'g'ri (sync) ishlatish uchun yordamchilar
 function _run(sql, params = []) { sqlDb.prepare(sql).run(..._norm(params)); }
 
-async function init() {
+async function init(opts = {}) {
+  const doSeed = opts.seed !== false; // bots: init({seed:false})
   sqlDb = new DatabaseSync(DB_FILE);
   // Ko'p jarayonli xavfsizlik: WAL rejimi + writer kutish vaqti
   sqlDb.exec('PRAGMA journal_mode = WAL');
@@ -65,6 +66,15 @@ async function init() {
     phone TEXT,
     products_note TEXT,
     note TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  // Ikki bot (admin/client) o'rtasida xabar/fayl uzatish navbati
+  _run(`CREATE TABLE IF NOT EXISTS bot_outbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target TEXT NOT NULL,
+    type TEXT NOT NULL,
+    payload_json TEXT,
+    status TEXT DEFAULT 'pending',
     created_at TEXT DEFAULT (datetime('now'))
   )`);
   _run(`CREATE TABLE IF NOT EXISTS supply_orders (
@@ -126,14 +136,20 @@ async function init() {
   saveDb();
 
   saveDb();
-  await seedData();
-  await seedMoreProducts();
+  if (doSeed) {
+    await seedData();
+    await seedMoreProducts();
+  }
 }
 
 // Ustun mavjud boʻlmasa qoʻshish (sql.js da ALTER TABLE ADD COLUMN)
 function ensureColumn(table, col, type) {
   const cols = sqlDb.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
-  if (!cols.includes(col)) _run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+  if (!cols.includes(col)) {
+    // Ko'p jarayon bir vaqtda qo'shsa — "duplicate column" xatosini yutamiz
+    try { _run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`); }
+    catch (e) { if (!/duplicate column/i.test(e.message)) throw e; }
+  }
 }
 
 async function seedData() {

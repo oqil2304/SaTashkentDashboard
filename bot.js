@@ -2,11 +2,28 @@
 require('dotenv').config();
 const { db, saveDb } = require('./db');
 
-const BOT_TOKEN       = process.env.BOT_TOKEN;
+// ── Ikki bot arxitekturasi ──────────────────────────────────────────────────
+// CLIENT bot (BOT_TOKEN) — ta'minotchilar uchun.
+// ADMIN bot (ADMIN_BOT_TOKEN) — admin uchun. Agar ADMIN_BOT_TOKEN bo'lmasa,
+// bitta bot "both" rejimida ishlaydi (eski xatti-harakat saqlanadi).
+const CLIENT_TOKEN    = process.env.BOT_TOKEN;
+const ADMIN_TOKEN     = process.env.ADMIN_BOT_TOKEN || CLIENT_TOKEN;
+const SPLIT           = !!process.env.ADMIN_BOT_TOKEN;
 const ADMIN_CHAT_ID   = String(process.env.ADMIN_CHAT_ID || '');
 const FINANCE_API_URL = process.env.FINANCE_API_URL || '';
 const FINANCE_API_KEY = process.env.FINANCE_API_KEY || '';
-const API = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : null;
+
+let ROLE = process.env.BOT_ROLE || 'both';  // 'both' | 'admin' | 'client'
+let BOT_TOKEN = null;                        // joriy jarayon tokeni
+let API = null;
+function _setRole(role) {
+  ROLE = role || 'both';
+  BOT_TOKEN = (ROLE === 'admin') ? ADMIN_TOKEN : CLIENT_TOKEN;
+  API = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : null;
+}
+_setRole(ROLE);
+const ownsAdmin    = () => ROLE === 'both' || ROLE === 'admin';
+const ownsSupplier = () => ROLE === 'both' || ROLE === 'client';
 
 // ── AI yordamchi (ta'minotchilar bilan muloqot) ─────────────────────────────
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
@@ -66,6 +83,40 @@ function forwardMessage(toChat, fromChat, messageId) {
 async function getFileLink(fileId) {
   const f = await tg('getFile', { file_id: fileId });
   return f ? `https://api.telegram.org/file/bot${BOT_TOKEN}/${f.file_path}` : null;
+}
+
+// ── Botlararo yetkazish (admin ↔ client) ────────────────────────────────────
+// Faylni URL orqali yuborish — boshqa bot ham ushbu URL'dan ko'chirib oladi.
+function sendFileByUrl(chatId, fileUrl, kind, caption) {
+  if (kind === 'document') return tg('sendDocument', { chat_id: chatId, document: fileUrl, caption: caption || '', parse_mode: 'HTML' });
+  return tg('sendPhoto', { chat_id: chatId, photo: fileUrl, caption: caption || '', parse_mode: 'HTML' });
+}
+function enqueueOutbox(target, type, payload) {
+  return db.run2(
+    "INSERT INTO bot_outbox (target,type,payload_json,status,created_at) VALUES (?,?,?,'pending',datetime('now'))",
+    [target, type, JSON.stringify(payload || {})]
+  );
+}
+// Admin'ga xabar: o'z jarayonida bo'lsa to'g'ridan, aks holda outbox orqali
+async function messageAdmin(text, extra = {}) {
+  if (!ADMIN_CHAT_ID) return;
+  if (ownsAdmin()) return sendMessage(ADMIN_CHAT_ID, text, extra);
+  return enqueueOutbox('admin', 'text', { chat_id: ADMIN_CHAT_ID, text, extra });
+}
+async function fileToAdmin(fileUrl, kind, caption) {
+  if (!ADMIN_CHAT_ID || !fileUrl) return;
+  if (ownsAdmin()) return sendFileByUrl(ADMIN_CHAT_ID, fileUrl, kind, caption);
+  return enqueueOutbox('admin', 'file', { chat_id: ADMIN_CHAT_ID, file_url: fileUrl, kind, caption });
+}
+// Ta'minotchiga xabar/fayl
+async function messageSupplier(chatId, text, extra = {}) {
+  if (ownsSupplier()) return sendMessage(chatId, text, extra);
+  return enqueueOutbox('client', 'text', { chat_id: chatId, text, extra });
+}
+async function fileToSupplier(chatId, fileUrl, kind, caption) {
+  if (!fileUrl) return;
+  if (ownsSupplier()) return sendFileByUrl(chatId, fileUrl, kind, caption);
+  return enqueueOutbox('client', 'file', { chat_id: chatId, file_url: fileUrl, kind, caption });
 }
 
 // ── Sessiyalar (xotirada) ──────────────────────────────────────────────────
@@ -359,8 +410,7 @@ async function completeOrder(orderId) {
   }
   await db.run2("UPDATE supply_orders SET status='delivered', updated_at=datetime('now') WHERE id=?", [orderId]);
   saveDb();
-  if (ADMIN_CHAT_ID)
-    await sendMessage(ADMIN_CHAT_ID, `✅ <b>${order.product_name}</b> — ${order.qty} ${order.unit} omborga kiritildi!\nZakaz yakunlandi.`);
+  await messageAdmin(`✅ <b>${order.product_name}</b> — ${order.qty} ${order.unit} omborga kiritildi!\nZakaz yakunlandi.`);
   console.log(`[bot] Zakaz #${orderId} yakunlandi — ${members.length} ta pozitsiya ombori yangilandi`);
 }
 
@@ -373,7 +423,7 @@ async function setInTransit(orderId) {
   const qty = order.qty || '';
   const unit = order.unit || '';
   const adminMsg = `🚚 <b>${name}</b> (${qty} ${unit}) yo'lda!\n\nTovar omborga kelganda dashboard orqali <b>"✅ Keldi"</b> tugmasini bosing.`;
-  if (ADMIN_CHAT_ID) await sendMessage(ADMIN_CHAT_ID, adminMsg, { parse_mode: 'HTML' });
+  await messageAdmin(adminMsg);
 }
 
 // ── Miqdor so'rash oqimi (admin tasdiqlagandan keyin) ───────────────────────
@@ -408,21 +458,22 @@ function splitMembers(group) {
 }
 
 async function finalizeOrders(chatId, items) {
-  let sentCount = 0;
+  let queued = 0, noSupplier = 0;
   for (const it of items) {
     const members = splitMembers(it);
-    const r = await db.run2(
+    // status 'approved' — ta'minotchiga yuborishni client/both poller bajaradi
+    await db.run2(
       `INSERT INTO supply_orders (product_id, product_name, qty, unit, supplier_id, supplier_name, supplier_chat_id, status, members_json, created_at, updated_at)
        VALUES (?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
       [members[0].product_id, it.name, it.qty, it.unit, it.supplier_id, it.supplier_name, it.supplier_chat_id, 'approved', JSON.stringify(members)]);
     saveDb();
-    if (it.supplier_id && it.supplier_chat_id) {
-      if (await sendToSupplier({ ...it, id: r.lastID, product_name: it.name, members })) sentCount++;
-    } else {
+    if (it.supplier_id && it.supplier_chat_id) queued++;
+    else {
+      noSupplier++;
       await sendMessage(chatId, `⚠️ <b>${it.name}</b> uchun ta'minotchi biriktirilmagan yoki u botga ulanmagan. Dashboard orqali sozlang.`);
     }
   }
-  await sendMessage(chatId, `✅ ${items.length} ta pozitsiya tasdiqlandi.\n📨 ${sentCount} ta ta'minotchiga zakaz yuborildi.`);
+  await sendMessage(chatId, `✅ ${items.length} ta pozitsiya tasdiqlandi.\n📨 ${queued} ta zakaz ta'minotchilarga yuborilmoqda...`);
 }
 
 // Chek so'rash — narx kiritilgandan keyin chaqiriladi
@@ -733,7 +784,7 @@ async function handleMessage(msg) {
   }
 
   // ── Admin holatlari: miqdor kiritish, narx va to'lov cheki ──────────────────
-  if (adminOnly(chatId)) {
+  if (ownsAdmin() && adminOnly(chatId)) {
     // 1) Miqdor so'rash oqimi
     const flow = adminQtyFlow.get(chatId);
     if (flow) {
@@ -797,8 +848,10 @@ async function handleMessage(msg) {
       _qRemove(pendingChecks, chatId, check.order_id);
       if (check.prompt_msg_id) checkByReply.delete(check.prompt_msg_id);
       if (check.supplier_chat_id) {
-        await sendMessage(check.supplier_chat_id, `✅ <b>${check.product_name}</b> (${check.qty} ${check.unit}) uchun to'lov amalga oshirildi! To'lov cheki:`);
-        await forwardMessage(check.supplier_chat_id, msg.chat.id, msg.message_id);
+        const chkKind = msg.document ? 'document' : 'photo';
+        const chkUrl  = await getFileLink(fileId);
+        await messageSupplier(check.supplier_chat_id, `✅ <b>${check.product_name}</b> (${check.qty} ${check.unit}) uchun to'lov amalga oshirildi! To'lov cheki:`);
+        await fileToSupplier(check.supplier_chat_id, chkUrl, chkKind, `🧾 ${check.product_name} — to'lov cheki`);
         await db.run2('UPDATE supply_orders SET payment_check_file_id=? WHERE id=?', [fileId, check.order_id]);
         saveDb();
         const remaining = _qGet(pendingChecks, chatId).length;
@@ -810,6 +863,9 @@ async function handleMessage(msg) {
     }
     return;
   }
+
+  // Bundan keyingisi — faqat ta'minotchi (client) tomoni
+  if (!ownsSupplier()) return;
 
   // Ta'minotchi buyruqlari
   if (/^\/(myzakaz|jarayon)/.test(text) || text === '📦 Zakazlarim' || text === '⏳ Jarayon') {
@@ -869,9 +925,11 @@ async function handleMessage(msg) {
     (remainingInv ? `\n\n📌 Yana ${remainingInv} ta zakaz uchun faktura kutilmoqda.` : ''));
 
   if (ADMIN_CHAT_ID) {
-    await sendMessage(ADMIN_CHAT_ID, `📄 <b>${pending.product_name}</b> uchun schet-faktura keldi!\nTa'minotchi: ${msg.from.first_name || chatId}\nMiqdor: ${pending.qty} ${pending.unit}`);
-    if (msg.document || msg.photo) await forwardMessage(ADMIN_CHAT_ID, msg.chat.id, msg.message_id);
-    await sendMessage(ADMIN_CHAT_ID, `To'lov tasdiqlash:`, {
+    const invKind = msg.document ? 'document' : 'photo';
+    const invUrl  = await getFileLink(fileId);
+    await messageAdmin(`📄 <b>${pending.product_name}</b> uchun schet-faktura keldi!\nTa'minotchi: ${msg.from.first_name || chatId}\nMiqdor: ${pending.qty} ${pending.unit}`);
+    await fileToAdmin(invUrl, invKind, `📄 ${pending.product_name} — schet-faktura`);
+    await messageAdmin(`To'lov tasdiqlash:`, {
       reply_markup: { inline_keyboard: [[
         { text: "✅ To'lov qilindi — omborga kiritish", callback_data: `pay_${pending.order_id}` },
         { text: '❌ Rad etish', callback_data: `reject_${pending.order_id}` }
@@ -880,11 +938,12 @@ async function handleMessage(msg) {
   }
   if (FINANCE_API_URL && !FINANCE_API_URL.includes('YOUR_')) {
     const ok = await forwardToFinance(pending.order_id, fileId, mimeType);
-    if (ok && ADMIN_CHAT_ID) await sendMessage(ADMIN_CHAT_ID, '📤 Faktura finance saytga yuborildi.');
+    if (ok) await messageAdmin('📤 Faktura finance saytga yuborildi.');
   }
 }
 
 async function handleCallback(query) {
+  if (!ownsAdmin()) return; // barcha tugmalar admin tomoniga tegishli
   const chatId = query.message.chat.id;
   const msgId  = query.message.message_id;
   const data   = query.data || '';
@@ -929,7 +988,7 @@ async function handleCallback(query) {
     // Ta'minotchiga ham xabar beramiz
     if (rejOrder && rejOrder.supplier_chat_id) {
       const invoiceTime = fmtTashkentTime(rejOrder.updated_at);
-      await sendMessage(rejOrder.supplier_chat_id,
+      await messageSupplier(rejOrder.supplier_chat_id,
         `❌ <b>${rejOrder.product_name}</b> (${rejOrder.qty} ${rejOrder.unit}) uchun to'lov rad etildi.\n` +
         (invoiceTime ? `Siz ${invoiceTime} da yuborgan schet-faktura bo'yicha.\n` : '') +
         `Savollar bo'lsa operator bilan bog'laning: ${COMPANY_INFO.phone}`);
@@ -991,21 +1050,74 @@ async function pollLoop() {
   setTimeout(pollLoop, updates ? 0 : 3000); // xato bo'lsa 3s kutib qayta
 }
 
-async function startBot() {
-  if (!API) { console.log("[bot] BOT_TOKEN yo'q — bot ishlamaydi"); return; }
+// ── Yangi zakazlarni ta'minotchilarga yuborish (client/both) ─────────────────
+async function pollNewOrders() {
+  if (!_polling) return;
+  try {
+    const orders = await db.all2(
+      "SELECT * FROM supply_orders WHERE status IN ('approved','manual_pending') AND supplier_chat_id IS NOT NULL AND supplier_chat_id != '' ORDER BY id ASC LIMIT 10");
+    for (const o of orders) {
+      await sendToSupplier(o); // muvaffaqiyatli bo'lsa status='awaiting_invoice' bo'ladi
+    }
+  } catch (e) { console.error('[bot] yangi zakaz yuborish xatosi:', e.message); }
+  setTimeout(pollNewOrders, 2500);
+}
+
+// ── Botlararo outbox: o'z target'iga kelgan xabar/fayllarni yetkazish ────────
+async function runOutboxAction(p) {
+  if (p.action === 'low_stock_check') await notifyLowStock(true);
+  else if (p.action === 'auto_check')  await autoCheckUrgent();
+  else if (p.action === 'complete_order' && p.order_id) await completeOrder(p.order_id);
+}
+async function processOutbox() {
+  if (!_polling) return;
+  let rows = [];
+  try {
+    rows = await db.all2("SELECT * FROM bot_outbox WHERE target=? AND status='pending' ORDER BY id ASC LIMIT 20", [ROLE]);
+  } catch (_) {}
+  for (const r of rows) {
+    let p = {}; try { p = JSON.parse(r.payload_json || '{}'); } catch (_) {}
+    try {
+      if (r.type === 'text')      await sendMessage(p.chat_id, p.text, p.extra || {});
+      else if (r.type === 'file') await sendFileByUrl(p.chat_id, p.file_url, p.kind, p.caption);
+      else if (r.type === 'action') await runOutboxAction(p);
+      await db.run2("UPDATE bot_outbox SET status='done' WHERE id=?", [r.id]);
+    } catch (e) {
+      console.error('[bot] outbox yetkazish xatosi:', e.message);
+      await db.run2("UPDATE bot_outbox SET status='error' WHERE id=?", [r.id]);
+    }
+  }
+  setTimeout(processOutbox, 1500);
+}
+
+async function startBot(role) {
+  _setRole(role || process.env.BOT_ROLE || 'both');
+  if (!API) { console.log(`[bot:${ROLE}] token yo'q — bot ishlamaydi`); return; }
   // Webhook o'chirilgan bo'lishi kerak (polling bilan ziddiyat bo'lmasligi uchun)
   await tg('deleteWebhook', { drop_pending_updates: false });
   const me = await tg('getMe');
-  if (!me) { console.log('[bot] ❌ Token noto\'g\'ri yoki internet yo\'q — bot ishlamadi'); return; }
+  if (!me) { console.log(`[bot:${ROLE}] ❌ Token noto'g'ri yoki internet yo'q`); return; }
   _botUsername = me.username || '';
-  console.log(`[bot] ✅ @${_botUsername} tayyor`);
+  console.log(`[bot:${ROLE}] ✅ @${_botUsername} tayyor`);
 
-  // Bot tavsifi va bio
-  await tg('setMyDescription', { description: 'SaTashkent Ta\'minot Bo\'limi boti.\n\nAdmin: ombor nazorati, zakaz tasdiqlash.\nTa\'minotchi: zakaz qabul qilish va schet-faktura yuborish.' });
-  await tg('setMyShortDescription', { short_description: 'SaTashkent — Ta\'minot boshqaruv tizimi' });
+  // Client/both bot username'ini settings'ga yozamiz (server ta'minotchi havolasi uchun)
+  if (ownsSupplier()) {
+    try {
+      await db.run2(
+        "INSERT INTO settings (key,value) VALUES ('client_bot_username',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        [_botUsername]);
+    } catch (_) {}
+  }
 
-  // Admin uchun buyruqlar (chat scope bilan)
-  if (ADMIN_CHAT_ID) {
+  // Bot tavsifi
+  const desc = ROLE === 'admin'
+    ? 'SaTashkent Ta\'minot — Admin boti.\n\nOmbor nazorati, zakaz tasdiqlash, to\'lov cheki.'
+    : 'SaTashkent Ta\'minot boti.\n\nTa\'minotchilar uchun: zakaz qabul qilish va schet-faktura yuborish.';
+  await tg('setMyDescription', { description: desc });
+  await tg('setMyShortDescription', { short_description: 'SaTashkent — Ta\'minot tizimi' });
+
+  // Admin buyruqlari (faqat admin/both)
+  if (ownsAdmin() && ADMIN_CHAT_ID) {
     await tg('setMyCommands', {
       commands: [
         { command: 'check',     description: '🔍 Ombor holatini tekshirish' },
@@ -1020,27 +1132,46 @@ async function startBot() {
     });
   }
 
-  // Barcha ta'minotchilar uchun buyruqlar
-  const sups = await db.all2("SELECT telegram_chat_id FROM suppliers WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''");
-  for (const s of sups) {
-    await tg('setMyCommands', {
-      commands: [
-        { command: 'myzakaz',  description: '📦 Mening zakazlarim' },
-        { command: 'jarayon',  description: '⏳ Jarayondagi zakazlar' },
-        { command: 'help',     description: '❓ Yordam' }
-      ],
-      scope: { type: 'chat', chat_id: Number(s.telegram_chat_id) }
-    });
+  // Ta'minotchi buyruqlari (faqat client/both)
+  if (ownsSupplier()) {
+    const sups = await db.all2("SELECT telegram_chat_id FROM suppliers WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''");
+    for (const s of sups) {
+      await tg('setMyCommands', {
+        commands: [
+          { command: 'myzakaz',  description: '📦 Mening zakazlarim' },
+          { command: 'jarayon',  description: '⏳ Jarayondagi zakazlar' },
+          { command: 'help',     description: '❓ Yordam' }
+        ],
+        scope: { type: 'chat', chat_id: Number(s.telegram_chat_id) }
+      });
+    }
   }
-  _polling = true;
-  _offset = 0; // navbatdagi xabarlardan boshlab o'qiymiz (birinchi /start ni o'tkazib yubormaslik)
-  pollLoop();
-  console.log(`[bot] ✅ Bot ishga tushdi: @${me.username} (long polling)`);
 
-  // Avtomatik tekshiruv: startdan biroz keyin + har soatda bir marta
-  const AUTO_CHECK_MS = 60 * 60 * 1000;
-  setTimeout(autoCheckUrgent, 15000);
-  setInterval(autoCheckUrgent, AUTO_CHECK_MS);
+  // Qayta ishga tushganda — kutilayotgan fakturalarni DB'dan tiklash (xotira yo'qolgan bo'lsa)
+  if (ownsSupplier()) {
+    try {
+      const awaiting = await db.all2(
+        "SELECT * FROM supply_orders WHERE status='awaiting_invoice' AND supplier_chat_id IS NOT NULL AND supplier_chat_id != ''");
+      for (const o of awaiting) {
+        const exists = _qGet(pendingInvoices, o.supplier_chat_id).some(x => x.order_id === o.id);
+        if (!exists) _qPush(pendingInvoices, o.supplier_chat_id, { order_id: o.id, product_name: o.product_name, qty: o.qty, unit: o.unit });
+      }
+    } catch (_) {}
+  }
+
+  _polling = true;
+  _offset = 0;
+  pollLoop();
+  if (SPLIT) processOutbox();        // ikki bot rejimida outbox'ni qayta ishlash
+  if (ownsSupplier()) pollNewOrders(); // yangi zakazlarni ta'minotchilarga yuborish
+  console.log(`[bot:${ROLE}] ✅ ishga tushdi: @${me.username} (long polling)`);
+
+  // Avtomatik ombor tekshiruvi — faqat admin/both
+  if (ownsAdmin()) {
+    const AUTO_CHECK_MS = 60 * 60 * 1000;
+    setTimeout(autoCheckUrgent, 15000);
+    setInterval(autoCheckUrgent, AUTO_CHECK_MS);
+  }
 }
 
-module.exports = { startBot, notifyLowStock, autoCheckUrgent, completeOrder, setInTransit, sendToSupplier, getBotUsername: () => _botUsername };
+module.exports = { startBot, notifyLowStock, autoCheckUrgent, completeOrder, setInTransit, sendToSupplier, enqueueOutbox, getBotUsername: () => _botUsername };

@@ -7,7 +7,24 @@ const path         = require('path');
 const fs           = require('fs');
 const multer       = require('multer');
 const { db, init, saveDb } = require('./db');
-const { startBot, notifyLowStock, autoCheckUrgent, completeOrder, sendToSupplier, getBotUsername } = require('./bot');
+const { startBot, notifyLowStock, autoCheckUrgent, completeOrder, sendToSupplier, getBotUsername, enqueueOutbox } = require('./bot');
+
+// Ikki bot rejimi: ADMIN_BOT_TOKEN bo'lsa botlar alohida jarayonlarda ishlaydi.
+// Bunda server bot funksiyalarini to'g'ridan chaqira olmaydi — outbox orqali yo'naltiramiz.
+const SPLIT_BOT = !!process.env.ADMIN_BOT_TOKEN;
+function triggerAdmin(action, extra = {}) {
+  if (!SPLIT_BOT) {
+    if (action === 'low_stock_check' && typeof notifyLowStock === 'function') return notifyLowStock(true);
+    if (action === 'auto_check'      && typeof autoCheckUrgent === 'function') return autoCheckUrgent();
+    if (action === 'complete_order'  && typeof completeOrder === 'function')   return completeOrder(extra.order_id);
+    return Promise.resolve();
+  }
+  return enqueueOutbox('admin', 'action', { action, ...extra });
+}
+async function clientBotUsername() {
+  try { const r = await db.get2("SELECT value FROM settings WHERE key='client_bot_username'"); return r?.value || ''; }
+  catch { return ''; }
+}
 
 // Avatar upload konfiguratsiyasi
 const avatarStorage = multer.diskStorage({
@@ -414,7 +431,7 @@ app.post('/api/consumptions', auth, canWrite, async (req, res) => {
     const rows = await Promise.all(ids.map(id => db.get2(CONS_SELECT + ' WHERE co.id=?', [id])));
     res.status(201).json(rows[0]); // birinchi yozuvni qaytaramiz (UI uchun)
     // Rasxoddan keyin ombor kamaygan bo'lishi mumkin — shoshilinch/tugaganlarni tekshirish
-    if (typeof autoCheckUrgent === 'function') autoCheckUrgent().catch(() => {});
+    triggerAdmin('auto_check').catch(() => {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.delete('/api/consumptions/:id', auth, canWrite, async (req, res) => {
@@ -562,7 +579,7 @@ app.delete('/api/catalog/:id', auth, canWrite, async (req, res) => {
 
 // Ta'minotchi ulash yo'riqnomasi
 app.get('/api/suppliers/:id/link', auth, adminOnly, async (req, res) => {
-  const botUsername = getBotUsername() || process.env.BOT_USERNAME || '';
+  const botUsername = (await clientBotUsername()) || (typeof getBotUsername === 'function' ? getBotUsername() : '') || process.env.BOT_USERNAME || '';
   if (!botUsername) return res.status(503).json({ error: 'Bot hali ishga tushmagan, biroz kuting' });
   res.json({ link: `https://t.me/${botUsername}?start=supplier_${req.params.id}` });
 });
@@ -593,8 +610,8 @@ app.post('/api/purchases/manual-order', auth, canWrite, async (req, res) => {
        note || '', branch_id || null, membersJson]
     );
     saveDb();
+    // status='manual_pending' — client/both bot polleri ta'minotchiga avtomatik yuboradi
     const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [r.lastID]);
-    await sendToSupplier(order);
     res.status(201).json(order);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -668,7 +685,7 @@ app.put('/api/supply-orders/:id/arrived', auth, canWrite, async (req, res) => {
 // Admin ombor tekshiruvi — botga buyurtma ro'yxatini yuborish
 app.post('/api/bot/check-stock', auth, adminOnly, async (req, res) => {
   try {
-    await notifyLowStock(true);
+    await triggerAdmin('low_stock_check');
     res.json({ ok: true, message: 'Tekshiruv bajarildi — Telegram ga yuborildi' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -677,7 +694,7 @@ app.post('/api/bot/check-stock', auth, adminOnly, async (req, res) => {
 app.post('/api/bot/finance-webhook', async (req, res) => {
   try {
     const { order_id, status } = req.body;
-    if (status === 'paid' && typeof completeOrder === 'function') await completeOrder(order_id);
+    if (status === 'paid') await triggerAdmin('complete_order', { order_id });
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -686,8 +703,9 @@ init().then(async () => {
   // Kunlik sarf tizimini ishga tushirish (server start bo'lganda)
   await catchUpDailyConsumptions();
   scheduleDailyConsumption();
-  // Telegram bot ishga tushirish
-  startBot();
+  // Telegram bot: faqat BITTA bot rejimida server ichida ishga tushadi.
+  // Ikki bot rejimida (ADMIN_BOT_TOKEN bor) — admin-bot.js va client-bot.js alohida ishlaydi.
+  if (!SPLIT_BOT) startBot('both');
   app.listen(PORT, () => {
     console.log(`🚀 SaTashkent Dashboard → http://localhost:${PORT}`);
     console.log('   Login: admin / admin123');
@@ -784,7 +802,7 @@ function scheduleDailyConsumption() {
     await runDailyConsumption(todayStr);
     await db.run2("INSERT OR REPLACE INTO settings (key,value) VALUES ('last_daily_run',?)", [todayStr]);
     // Kunlik sarfdan keyin shoshilinch/tugagan tovarlarni avtomatik tekshirish
-    if (typeof autoCheckUrgent === 'function') autoCheckUrgent().catch(() => {});
+    triggerAdmin('auto_check').catch(() => {});
     setTimeout(tick, msUntilMidnight());
   }, msUntilMidnight());
 }
