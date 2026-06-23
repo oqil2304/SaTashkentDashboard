@@ -322,33 +322,28 @@ async function savePurchase(id) {
   if (!brId)                      { toast('Filialni tanlang', 'error'); return; }
 
   try {
-    // Har bir mahsulotni ombor mahsulotiga moslaymiz
-    const members = [];
-    for (const it of items) {
-      const prod = await _findOrCreateProduct(it.name, it.unit, brId);
-      members.push({ product_id: prod.id, name: prod.name, qty: it.qty, unit: prod.unit || it.unit || '' });
-    }
-
-    // Ulangan ta'minotchi tanlangan → bot orqali buyurtma (bitta zakaz, ko'p mahsulot)
+    // Ulangan ta'minotchi tanlangan → bot orqali buyurtma
+    // Ombor mahsuloti YARATILMAYDI — faqat nom/miqdor/filial saqlanadi
+    // Ombor faqat admin "Keldi" bosganda yangilanadi
     if (suppId) {
+      const members = items.map(it => ({ name: it.name, qty: it.qty, unit: it.unit }));
       await api('POST', '/api/purchases/manual-order', {
         members,
-        product_id:  members[0].product_id,
-        quantity:    members[0].qty,
         supplier_id: suppId,
         branch_id:   brId,
         note
       });
       toast("Ta'minotchiga faktura so'rovi yuborildi ✅");
     } else {
-      // Ta'minotchisiz — har bir mahsulotni to'g'ridan-to'g'ri omborga
-      for (const m of members) {
+      // Ta'minotchisiz — mahsulotni ombordan topamiz yoki yaratamiz, to'g'ridan qo'shamiz
+      for (const it of items) {
+        const prod = await _findOrCreateProduct(it.name, it.unit, brId);
         await api('POST', '/api/purchases', {
-          product_id: m.product_id, quantity: m.qty, unit_price: 0,
+          product_id: prod.id, quantity: it.qty, unit_price: 0,
           purchase_date: pdate, supplier: '', supplier_id: null, note
         });
       }
-      toast(`${members.length} ta mahsulot omborga qo'shildi ✅`);
+      toast(`${items.length} ta mahsulot omborga qo'shildi ✅`);
     }
     closeModal(true);
     await loadAll();

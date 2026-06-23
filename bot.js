@@ -330,15 +330,32 @@ async function completeOrder(orderId) {
 
   let firstRow = true;
   for (const m of members) {
-    if (!m.product_id || !(m.qty > 0)) continue;
-    // Dostavka narxi bitta zakazga tegishli — faqat birinchi qatorga yozamiz (takrorlanmasin)
+    if (!(m.qty > 0)) continue;
+    const brId = m.branch_id || order.branch_id || null;
+    // product_id yo'q bo'lsa — nom bo'yicha topamiz yoki yaratamiz
+    let prodId = m.product_id || null;
+    if (!prodId) {
+      const existing = await db.get2(
+        'SELECT id FROM products WHERE lower(name)=lower(?) AND (branch_id=? OR branch_id IS NULL) LIMIT 1',
+        [m.name, brId]
+      );
+      if (existing) {
+        prodId = existing.id;
+      } else {
+        const nr = await db.run2(
+          'INSERT INTO products (name, branch_id, unit, daily_usage, current_stock, min_stock) VALUES (?,?,?,0,0,0)',
+          [m.name, brId, m.unit || '']
+        );
+        prodId = nr.lastID;
+      }
+    }
     const delivery = firstRow ? (order.delivery_cost || 0) : 0;
     firstRow = false;
     await db.run2(
       `INSERT INTO purchases (product_id, quantity, unit_price, purchase_date, supplier, supplier_id, note, remaining_qty, delivery_cost, created_at)
        VALUES (?, ?, ?, date('now'), ?, ?, 'Telegram bot orqali zakaz', ?, ?, datetime('now'))`,
-      [m.product_id, m.qty, order.unit_price || 0, order.supplier_name || '', order.supplier_id || null, m.qty, delivery]);
-    await db.run2('UPDATE products SET current_stock = current_stock + ? WHERE id=?', [m.qty, m.product_id]);
+      [prodId, m.qty, order.unit_price || 0, order.supplier_name || '', order.supplier_id || null, m.qty, delivery]);
+    await db.run2('UPDATE products SET current_stock = current_stock + ? WHERE id=?', [m.qty, prodId]);
   }
   await db.run2("UPDATE supply_orders SET status='delivered', updated_at=datetime('now') WHERE id=?", [orderId]);
   saveDb();

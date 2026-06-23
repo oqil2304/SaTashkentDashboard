@@ -569,28 +569,28 @@ app.get('/api/suppliers/:id/link', auth, adminOnly, async (req, res) => {
 
 // Qo'lda yaratilgan buyurtma — ta'minotchiga bot orqali xabar yuboradi
 app.post('/api/purchases/manual-order', auth, canWrite, async (req, res) => {
-  const { product_id, quantity, unit_price, supplier_id, note, branch_id, delivery_cost, members } = req.body;
+  const { supplier_id, note, branch_id, members } = req.body;
   if (!supplier_id) return res.status(400).json({ error: 'Ta\'minotchi kerak' });
-  if (!product_id || !quantity) return res.status(400).json({ error: 'Mahsulot va miqdor kerak' });
+  if (!Array.isArray(members) || !members.length) return res.status(400).json({ error: 'Kamida bitta mahsulot kerak' });
   try {
-    const prod = await db.get2('SELECT * FROM products WHERE id=?', [product_id]);
-    const sup  = await db.get2('SELECT * FROM suppliers WHERE id=?', [supplier_id]);
-    if (!prod) return res.status(404).json({ error: 'Mahsulot topilmadi' });
-    if (!sup)  return res.status(404).json({ error: 'Ta\'minotchi topilmadi' });
+    const sup = await db.get2('SELECT * FROM suppliers WHERE id=?', [supplier_id]);
+    if (!sup) return res.status(404).json({ error: 'Ta\'minotchi topilmadi' });
     if (!sup.telegram_chat_id) return res.status(400).json({ error: 'Ta\'minotchi botga ulanmagan' });
-    const bId = branch_id || prod.branch_id || null;
-    // Ko'p mahsulotli buyurtma (members) — members_json sifatida saqlanadi
-    const memberList = Array.isArray(members) && members.length ? members : null;
-    const membersJson = memberList ? JSON.stringify(memberList) : null;
-    // Buyurtma nomi: bir nechta mahsulot bo'lsa hammasini ko'rsatamiz
-    const orderName = memberList
-      ? memberList.map(m => `${m.name} (${m.qty} ${m.unit || ''})`.trim()).join(', ')
-      : prod.name;
+
+    // Buyurtma nomi — barcha mahsulotlar ro'yxati
+    const orderName = members.map(m => `${m.name} (${m.qty} ${m.unit || ''})`.trim()).join(', ');
+    const firstMember = members[0];
+    // members_json — nom/miqdor/birlik/filial; product_id YO'Q (ombor hali yaratilmaydi)
+    const membersJson = JSON.stringify(members.map(m => ({
+      name: m.name, qty: m.qty, unit: m.unit || '', branch_id: branch_id || null
+    })));
+
     const r = await db.run2(
       `INSERT INTO supply_orders (product_id, product_name, qty, unit, unit_price, supplier_id, supplier_name, supplier_chat_id, status, note, branch_id, delivery_cost, members_json, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`,
-      [product_id, orderName, quantity, prod.unit || '', unit_price || 0,
-       sup.id, sup.name, sup.telegram_chat_id, 'manual_pending', note || '', bId, delivery_cost || 0, membersJson]
+       VALUES (NULL, ?, ?, ?, 0, ?, ?, ?, 'manual_pending', ?, ?, 0, ?, datetime('now'), datetime('now'))`,
+      [orderName, firstMember.qty, firstMember.unit || '',
+       sup.id, sup.name, sup.telegram_chat_id,
+       note || '', branch_id || null, membersJson]
     );
     saveDb();
     const order = await db.get2('SELECT * FROM supply_orders WHERE id=?', [r.lastID]);
@@ -630,14 +630,34 @@ app.put('/api/supply-orders/:id/arrived', auth, canWrite, async (req, res) => {
     const arrivedDelivery = (req.body && req.body.delivery_cost != null) ? (parseFloat(req.body.delivery_cost) || 0) : (order.delivery_cost || 0);
     let firstRow = true;
     for (const m of members) {
-      if (!m.product_id || !(m.qty > 0)) continue;
+      if (!(m.qty > 0)) continue;
+      const brId = m.branch_id || order.branch_id || null;
+
+      // product_id yo'q bo'lsa — nom+filial bo'yicha topamiz yoki yaratamiz (birinchi marta omborda paydo bo'ladi)
+      let prodId = m.product_id || null;
+      if (!prodId) {
+        const existing = await db.get2(
+          'SELECT id FROM products WHERE lower(name)=lower(?) AND (branch_id=? OR branch_id IS NULL) LIMIT 1',
+          [m.name, brId]
+        );
+        if (existing) {
+          prodId = existing.id;
+        } else {
+          const nr = await db.run2(
+            'INSERT INTO products (name, branch_id, unit, daily_usage, current_stock, min_stock) VALUES (?,?,?,0,0,0)',
+            [m.name, brId, m.unit || '']
+          );
+          prodId = nr.lastID;
+        }
+      }
+
       const delivery = firstRow ? arrivedDelivery : 0;
       firstRow = false;
       await db.run2(
         `INSERT INTO purchases (product_id, quantity, unit_price, purchase_date, supplier, supplier_id, note, remaining_qty, delivery_cost, created_at)
          VALUES (?, ?, ?, date('now'), ?, ?, 'Telegram bot orqali zakaz', ?, ?, datetime('now'))`,
-        [m.product_id, m.qty, order.unit_price || 0, order.supplier_name || '', order.supplier_id || null, m.qty, delivery]);
-      await db.run2('UPDATE products SET current_stock = current_stock + ? WHERE id=?', [m.qty, m.product_id]);
+        [prodId, m.qty, order.unit_price || 0, order.supplier_name || '', order.supplier_id || null, m.qty, delivery]);
+      await db.run2('UPDATE products SET current_stock = current_stock + ? WHERE id=?', [m.qty, prodId]);
     }
     await db.run2("UPDATE supply_orders SET status='delivered', updated_at=datetime('now') WHERE id=?", [order.id]);
     saveDb();
