@@ -247,21 +247,133 @@ function exportReportExcel() {
 
   const wb = XLSX.utils.book_new();
 
+  // ── 1-varaq: Xulosa ──────────────────────────────────────────────────────
   const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
-  ws1['!cols'] = [{ wch: 35 }, { wch: 22 }, { wch: 22 }, { wch: 12 }];
+  ws1['!cols'] = [{ wch: 36 }, { wch: 22 }, { wch: 22 }, { wch: 12 }];
+  ws1['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },   // sarlavha A1:D1
+    { s: { r: 10, c: 0 }, e: { r: 10, c: 3 } }  // bo'lim sarlavhasi A11:D11
+  ];
+  _styleTitle(ws1, 0, 3);
+  _styleSection(ws1, 10, 3);
+  _styleHeaderRow(ws1, 4, 1);                   // Ko'rsatkich / Qiymat
+  _styleHeaderRow(ws1, 11, 3);                  // Filial header
+  _styleLabelCol(ws1, [1, 2], 0);              // Davr / Eksport sanasi yorliqlari
+  _styleLabelCol(ws1, [5, 6, 7, 8], 0);        // metrik nomlari
+  _numFmt(ws1, [8], [1]);                       // Jami xarajat
+  _numFmt(ws1, _range(12, 11 + branches.length), [2]); // filial xarajatlari
+  _zebra(ws1, 12, 11 + branches.length, 3);
   XLSX.utils.book_append_sheet(wb, ws1, 'Xulosa');
 
+  // ── 2-varaq: Sotib olishlar ──────────────────────────────────────────────
   const ws2 = XLSX.utils.aoa_to_sheet(purchData);
-  ws2['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 10 }, { wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 20 }];
+  ws2['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 10 }, { wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 24 }];
+  _styleHeaderRow(ws2, 0, 8);
+  const p2last = monthPurchases.length;          // 1..p2last data qatorlari
+  _zebra(ws2, 1, p2last, 8);
+  _numFmt(ws2, _range(1, p2last), [3, 5, 6]);   // miqdor, narx, jami
+  _styleTotalRow(ws2, p2last + 2, 8, [6]);       // JAMI qatori (bo'sh qatordan keyin)
   XLSX.utils.book_append_sheet(wb, ws2, 'Sotib olishlar');
 
+  // ── 3-varaq: Rasxodlar ───────────────────────────────────────────────────
   const ws3 = XLSX.utils.aoa_to_sheet(consData);
   ws3['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 10 }, { wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 22 }];
+  _styleHeaderRow(ws3, 0, 8);
+  const c3last = monthConsumptions.length;
+  _zebra(ws3, 1, c3last, 8);
+  _numFmt(ws3, _range(1, c3last), [4, 6, 7]);   // miqdor, narx, jami
+  _styleTotalRow(ws3, c3last + 2, 8, [7]);
   XLSX.utils.book_append_sheet(wb, ws3, 'Rasxodlar');
 
   const fname = `SaTashkent_Hisobot_${ym}.xlsx`;
   XLSX.writeFile(wb, fname);
   toast(`✅ ${fname} yuklab olindi`);
+}
+
+// ── Excel dizayn yordamchilari (xlsx-js-style) ─────────────────────────────
+const _XL_TEAL   = '0F766E';
+const _XL_DARK   = '0F172A';
+const _XL_LIGHT  = 'E6F4F1';
+const _XL_ZEBRA  = 'F1F5F9';
+const _XL_BORDER = { style: 'thin', color: { rgb: 'D1D9E0' } };
+const _xlBorders = () => ({ top: _XL_BORDER, bottom: _XL_BORDER, left: _XL_BORDER, right: _XL_BORDER });
+function _cell(ws, r, c) {
+  const ref = XLSX.utils.encode_cell({ r, c });
+  if (!ws[ref]) ws[ref] = { t: 's', v: '' };
+  return ws[ref];
+}
+function _range(a, b) { const out = []; for (let i = a; i <= b; i++) out.push(i); return out; }
+function _styleTitle(ws, r, lastCol) {
+  for (let c = 0; c <= lastCol; c++) {
+    _cell(ws, r, c).s = {
+      font: { bold: true, sz: 16, color: { rgb: 'FFFFFF' }, name: 'Calibri' },
+      fill: { patternType: 'solid', fgColor: { rgb: _XL_TEAL } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+  }
+  if (!ws['!rows']) ws['!rows'] = [];
+  ws['!rows'][r] = { hpt: 30 };
+}
+function _styleSection(ws, r, lastCol) {
+  for (let c = 0; c <= lastCol; c++) {
+    _cell(ws, r, c).s = {
+      font: { bold: true, sz: 13, color: { rgb: _XL_TEAL }, name: 'Calibri' },
+      fill: { patternType: 'solid', fgColor: { rgb: _XL_LIGHT } },
+      alignment: { horizontal: 'left', vertical: 'center' }
+    };
+  }
+  if (!ws['!rows']) ws['!rows'] = [];
+  ws['!rows'][r] = { hpt: 24 };
+}
+function _styleHeaderRow(ws, r, lastCol) {
+  for (let c = 0; c <= lastCol; c++) {
+    _cell(ws, r, c).s = {
+      font: { bold: true, sz: 12, color: { rgb: 'FFFFFF' }, name: 'Calibri' },
+      fill: { patternType: 'solid', fgColor: { rgb: _XL_TEAL } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: _xlBorders()
+    };
+  }
+  if (!ws['!rows']) ws['!rows'] = [];
+  ws['!rows'][r] = { hpt: 26 };
+}
+function _styleTotalRow(ws, r, lastCol, moneyCols = []) {
+  for (let c = 0; c <= lastCol; c++) {
+    const cl = _cell(ws, r, c);
+    cl.s = {
+      font: { bold: true, sz: 12, color: { rgb: _XL_DARK }, name: 'Calibri' },
+      fill: { patternType: 'solid', fgColor: { rgb: _XL_LIGHT } },
+      alignment: { horizontal: moneyCols.includes(c) ? 'right' : 'left', vertical: 'center' },
+      border: { top: { style: 'medium', color: { rgb: _XL_TEAL } }, bottom: _XL_BORDER, left: _XL_BORDER, right: _XL_BORDER }
+    };
+    if (moneyCols.includes(c)) cl.s.numFmt = '#,##0" so\'m"';
+  }
+}
+function _styleLabelCol(ws, rows, c) {
+  for (const r of rows) {
+    _cell(ws, r, c).s = { font: { bold: true, sz: 11, color: { rgb: _XL_DARK } }, alignment: { vertical: 'center' } };
+  }
+}
+function _numFmt(ws, rows, cols) {
+  for (const r of rows) for (const c of cols) {
+    const cl = _cell(ws, r, c);
+    cl.s = Object.assign({}, cl.s, { numFmt: '#,##0', alignment: Object.assign({ horizontal: 'right', vertical: 'center' }, (cl.s && cl.s.alignment) || {}) });
+    cl.s.alignment.horizontal = 'right';
+  }
+}
+function _zebra(ws, rFrom, rTo, lastCol) {
+  for (let r = rFrom; r <= rTo; r++) {
+    const shade = ((r - rFrom) % 2) === 1;
+    for (let c = 0; c <= lastCol; c++) {
+      const cl = _cell(ws, r, c);
+      cl.s = Object.assign({
+        font: { sz: 11, name: 'Calibri', color: { rgb: _XL_DARK } },
+        alignment: { vertical: 'center' },
+        border: _xlBorders()
+      }, cl.s || {});
+      if (shade) cl.s.fill = { patternType: 'solid', fgColor: { rgb: _XL_ZEBRA } };
+    }
+  }
 }
 
 // Filial rasxodlari detail sahifasi
