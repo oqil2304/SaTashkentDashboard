@@ -15,9 +15,13 @@ function toast(msg, type = 'success') {
 
 function openModal(html, wide = false) {
   const box = document.getElementById('modal-box');
+  const overlay = document.getElementById('modal-overlay');
   box.innerHTML = html;
-  box.classList.toggle('wide', wide);
-  document.getElementById('modal-overlay').classList.add('open');
+  const full = wide === 'full';
+  box.classList.toggle('wide', wide === true);
+  box.classList.toggle('fullscreen', full);
+  overlay.classList.toggle('fullscreen', full);
+  overlay.classList.add('open');
   if (typeof applyI18n === 'function') applyI18n(box);
 }
 

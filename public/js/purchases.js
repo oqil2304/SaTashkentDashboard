@@ -222,7 +222,7 @@ function _purchModal(title, saveFn, opts = {}) {
         <button class="btn btn-secondary" onclick="closeModal(true)">Bekor</button>
         <button class="btn btn-primary" onclick="${saveFn}"><i class="ti ti-check"></i>Buyurtma berish</button>
       </div>
-    </div>`);
+    </div>`, 'full');
 
   _purchSupChange();
 }
