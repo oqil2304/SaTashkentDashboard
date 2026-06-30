@@ -86,8 +86,43 @@ async function getFileLink(fileId) {
 }
 
 // ── Botlararo yetkazish (admin ↔ client) ────────────────────────────────────
-// Faylni URL orqali yuborish — boshqa bot ham ushbu URL'dan ko'chirib oladi.
-function sendFileByUrl(chatId, fileUrl, kind, caption) {
+// Faylni URL orqali yuborish. Telegram api.telegram.org fayl-URL'larini
+// to'g'ridan-to'g'ri olishda ko'pincha xato beradi, shuning uchun avval
+// faylni baytlab yuklab olamiz, so'ng multipart (form-data) bilan qayta yuklaymiz.
+async function tgUpload(method, fileField, blob, filename, fields = {}) {
+  if (!API) return null;
+  try {
+    const form = new FormData();
+    for (const [k, v] of Object.entries(fields)) form.append(k, String(v));
+    form.append(fileField, blob, filename);
+    const res = await fetch(`${API}/${method}`, { method: 'POST', body: form });
+    const data = await res.json();
+    if (!data.ok) console.error(`[bot] ${method} (upload) xato:`, data.description);
+    return data.ok ? data.result : null;
+  } catch (e) {
+    console.error(`[bot] ${method} (upload) tarmoq xatosi:`, e.message);
+    return null;
+  }
+}
+async function sendFileByUrl(chatId, fileUrl, kind, caption) {
+  if (!fileUrl) return null;
+  // 1) Avval faylni yuklab olib, multipart bilan qayta yuklashga urinamiz (ishonchli)
+  try {
+    const r = await fetch(fileUrl);
+    if (r.ok) {
+      const buf  = Buffer.from(await r.arrayBuffer());
+      const blob = new Blob([buf]);
+      const fields = { chat_id: chatId, caption: caption || '', parse_mode: 'HTML' };
+      if (kind === 'document') {
+        const name = (fileUrl.split('/').pop() || 'file').split('?')[0] || 'document';
+        return await tgUpload('sendDocument', 'document', blob, name, fields);
+      }
+      return await tgUpload('sendPhoto', 'photo', blob, 'photo.jpg', fields);
+    }
+  } catch (e) {
+    console.error('[bot] fayl yuklab olishda xato, URL bilan urinaman:', e.message);
+  }
+  // 2) Zaxira variant: URL'ni to'g'ridan-to'g'ri Telegram'ga uzatish
   if (kind === 'document') return tg('sendDocument', { chat_id: chatId, document: fileUrl, caption: caption || '', parse_mode: 'HTML' });
   return tg('sendPhoto', { chat_id: chatId, photo: fileUrl, caption: caption || '', parse_mode: 'HTML' });
 }
