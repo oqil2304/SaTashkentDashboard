@@ -36,7 +36,14 @@ function renderCatalogTable() {
   }
   tbody.innerHTML = list.map((it, i) => `<tr>
     <td style="color:#94a3b8">${i + 1}</td>
-    <td style="font-weight:600">${esc(it.name)}</td>
+    <td style="font-weight:600">
+      <span style="display:inline-flex;align-items:center;gap:10px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:#e6f4f1;color:#0f766e;flex:none">
+          <i class="ti ti-box"></i>
+        </span>
+        ${esc(it.name)}
+      </span>
+    </td>
     <td><span class="badge badge-gray">${esc(it.unit || '—')}</span></td>
     <td style="text-align:right;white-space:nowrap">
       <button class="btn btn-sm btn-secondary btn-icon" onclick="openEditCatalog(${it.id})"><i class="ti ti-edit"></i></button>
