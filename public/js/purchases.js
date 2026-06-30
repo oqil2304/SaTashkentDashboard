@@ -75,6 +75,7 @@ function applyPurchaseFilter() {
       <td style="font-weight:700;color:var(--teal)">${isPending ? '<span style="color:#94a3b8">—</span>' : fmtMoney(sum)}</td>
       <td style="color:#64748b">${esc(p.supplier || '—')}</td>
       <td style="white-space:nowrap;text-align:right">
+        <div style="display:inline-flex;gap:10px;justify-content:flex-end;align-items:center">
         ${isPending
           ? (p.status === 'in_transit'
               ? `<button class="btn btn-sm btn-success btn-icon" onclick="arrivedOrder(${p.id})" title="Keldi">✅ Keldi</button>
@@ -83,6 +84,7 @@ function applyPurchaseFilter() {
           : `<button class="btn btn-sm btn-secondary btn-icon" onclick="openEditPurchase(${p.id})"><i class="ti ti-edit"></i></button>
              <button class="btn btn-sm btn-danger btn-icon" onclick="delPurchase(${p.id})"><i class="ti ti-trash"></i></button>`
         }
+        </div>
       </td>
     </tr>`;
   }).join('');
